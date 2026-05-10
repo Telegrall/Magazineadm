@@ -32,9 +32,11 @@
         body.dark .search-result { background:#17212b; }
         .status-badge { display:inline-block; padding:4px 8px; border-radius:10px; font-size:0.65rem; font-weight:600; }
         .status-new { background:#d4e4ff; color:#1a4a8a; }
-        .status-accepted { background:#d4f5d4; color:#1a7a1a; }
-        .status-preparing { background:#fff3d4; color:#8a6a1a; }
-        .status-done { background:#d4f5d4; color:#1a7a1a; }
+        .status-collecting { background:#e0d4ff; color:#4a1a8a; }
+        .status-packing { background:#fff3d4; color:#8a6a1a; }
+        .status-delivering { background:#ffe0c0; color:#8a4a1a; }
+        .status-ready { background:#d4f5d4; color:#1a7a1a; }
+        .status-done { background:#c0e0c0; color:#0a5a0a; }
         .status-cancelled { background:#ffe0e0; color:#c0392b; }
         .notification { position:fixed; top:10px; right:10px; background:#4bcb6e; color:#fff; padding:12px 20px; border-radius:12px; z-index:200; display:none; font-weight:600; font-size:0.85rem; }
         .login-screen { display:flex; align-items:center; justify-content:center; min-height:80vh; }
@@ -50,6 +52,7 @@
         .store-status .indicator { width:12px; height:12px; border-radius:50%; }
         .store-status .indicator.open { background:#4bcb6e; }
         .store-status .indicator.closed { background:#ff3b30; }
+        .qr-img { margin:4px 0; }
     </style>
 </head>
 <body>
@@ -66,30 +69,32 @@
 
     <div id="adminInterface" class="hidden">
         <div class="notification" id="notif"></div>
-        
-        <!-- Статус магазина -->
+
         <div class="card" style="margin-bottom:8px;">
             <div class="store-status">
                 <div class="indicator" id="storeIndicator"></div>
                 <span id="storeStatusText">Загрузка...</span>
                 <button class="btn-sm" id="storeToggleBtn" onclick="toggleStoreStatus()">Сменить</button>
             </div>
-            <div style="font-size:0.8rem; color:#888;" id="storeHours">Часы работы: загрузка...</div>
+            <div style="font-size:0.8rem; color:#888;" id="storeHours">Часы: загрузка...</div>
             <button class="btn-sm btn-outline" onclick="setStoreLink()" style="margin-top:8px;">Место продажи</button>
         </div>
 
         <div class="tabs">
-            <div class="tab active" onclick="adminTab('clients')">Клиенты</div>
+            <div class="tab active" onclick="adminTab('orders')">Заказы</div>
             <div class="tab" onclick="adminTab('products')">Товары</div>
-            <div class="tab" onclick="adminTab('orders')">Заказы</div>
+            <div class="tab" onclick="adminTab('clients')">Клиенты</div>
             <div class="tab" onclick="adminTab('promos')">Скидки</div>
             <div class="tab" onclick="adminTab('staff')">Сотрудники</div>
         </div>
-        <div id="apanelClients" class="card">
-            <h2>Поиск клиента (4 цифры карты)</h2>
-            <div class="field"><input type="text" id="aClientCard" placeholder="4567" maxlength="4"></div>
-            <button class="btn" onclick="adminSearchClient()">Найти</button>
-            <div id="aClientResult"></div>
+
+        <div id="apanelOrders" class="card">
+            <h2>Заказы</h2>
+            <div class="field"><label>Код заказа</label><input type="text" id="pickupCodeInput" placeholder="6-значный код" maxlength="6"></div>
+            <button class="btn btn-sm" onclick="findOrderByCode()">Найти по коду</button>
+            <div id="orderSearchResult"></div>
+            <hr style="margin:16px 0; border-color:#ddd;">
+            <div id="aOrdersList"></div>
         </div>
         <div id="apanelProducts" class="card hidden">
             <h2>Товары</h2>
@@ -98,14 +103,16 @@
             <div id="aProductResult"></div>
             <button class="btn-outline" onclick="adminAddProduct()" style="margin-top:12px;">Добавить товар</button>
         </div>
-        <div id="apanelOrders" class="card hidden">
-            <h2>Заказы</h2>
-            <div id="aOrdersList"></div>
+        <div id="apanelClients" class="card hidden">
+            <h2>Поиск клиента (4 цифры карты)</h2>
+            <div class="field"><input type="text" id="aClientCard" placeholder="4567" maxlength="4"></div>
+            <button class="btn" onclick="adminSearchClient()">Найти</button>
+            <div id="aClientResult"></div>
         </div>
         <div id="apanelPromos" class="card hidden">
             <h2>Промокоды</h2>
             <div id="aPromosList"></div>
-            <button class="btn-outline" onclick="adminAddPromo()" style="margin-top:12px;">Добавить промокод</button>
+            <button class="btn-outline" onclick="adminAddPromo()" style="margin-top:12px;">Добавить</button>
         </div>
         <div id="apanelStaff" class="card hidden">
             <h2>Сотрудники</h2>
@@ -120,198 +127,133 @@
     <button class="bottom-btn" onclick="adminTab('products')">Товары</button>
     <button class="bottom-btn" onclick="adminTab('clients')">Клиенты</button>
     <button class="bottom-btn" onclick="adminTab('promos')">Скидки</button>
-</div><script>
-    const SUPABASE_URL = "https://iiuahjmpszfcgtwapidt.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_iFYpqkv4D0qEOj4Dn1X9Nw_OH9d5Bji";
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+</div><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Магазин — Админка</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system, sans-serif; }
+        body { background:#f5f5f5; min-height:100vh; padding:16px; padding-bottom:80px; }
+        body.dark { background:#0e1621; color:#eef4ff; }
+        .container { max-width:500px; margin:0 auto; }
+        h1, h2, h3 { color:#2b9aff; margin-bottom:12px; }
+        .card { background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,0.08); }
+        body.dark .card { background:#1f2c38; }
+        .field { margin-bottom:10px; }
+        .field label { display:block; font-size:0.8rem; color:#666; margin-bottom:4px; }
+        body.dark .field label { color:#8e9eae; }
+        .field input, .field select { width:100%; padding:10px 14px; border:1px solid #ddd; border-radius:12px; font-size:0.9rem; }
+        body.dark .field input, body.dark .field select { background:#0e1621; border-color:#2b3b4c; color:#fff; }
+        .btn { width:100%; background:#2b9aff; border:none; border-radius:14px; padding:12px; color:#fff; font-weight:600; cursor:pointer; margin-bottom:8px; }
+        .btn-outline { background:transparent; border:1px solid #2b9aff; color:#2b9aff; }
+        .btn-green { background:#4bcb6e; }
+        .btn-danger { background:#ff3b30; }
+        .btn-sm { padding:6px 12px; font-size:0.7rem; border-radius:10px; width:auto; }
+        .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+        .tab { flex:1; min-width:50px; text-align:center; padding:10px; background:#e8e8e8; border-radius:14px; cursor:pointer; font-weight:500; font-size:0.7rem; }
+        .tab.active { background:#2b9aff; color:#fff; }
+        body.dark .tab { background:#2b3b4c; }
+        .hidden { display:none !important; }
+        .search-result { padding:10px 12px; background:#f9f9f9; border-radius:10px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+        body.dark .search-result { background:#17212b; }
+        .status-badge { display:inline-block; padding:4px 8px; border-radius:10px; font-size:0.65rem; font-weight:600; }
+        .status-new { background:#d4e4ff; color:#1a4a8a; }
+        .status-collecting { background:#e0d4ff; color:#4a1a8a; }
+        .status-packing { background:#fff3d4; color:#8a6a1a; }
+        .status-delivering { background:#ffe0c0; color:#8a4a1a; }
+        .status-ready { background:#d4f5d4; color:#1a7a1a; }
+        .status-done { background:#c0e0c0; color:#0a5a0a; }
+        .status-cancelled { background:#ffe0e0; color:#c0392b; }
+        .notification { position:fixed; top:10px; right:10px; background:#4bcb6e; color:#fff; padding:12px 20px; border-radius:12px; z-index:200; display:none; font-weight:600; font-size:0.85rem; }
+        .login-screen { display:flex; align-items:center; justify-content:center; min-height:80vh; }
+        .login-card { background:#fff; border-radius:24px; padding:30px; width:100%; max-width:350px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+        body.dark .login-card { background:#1f2c38; }
+        .login-card input { width:100%; padding:12px; margin-bottom:12px; border:1px solid #ddd; border-radius:12px; }
+        body.dark .login-card input { background:#0e1621; border-color:#2b3b4c; color:#fff; }
+        .bottom-bar { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid #ddd; display:flex; gap:8px; padding:10px 16px; z-index:50; }
+        body.dark .bottom-bar { background:#1f2c38; border-color:#2b3b4c; }
+        .bottom-btn { flex:1; text-align:center; padding:10px; border-radius:12px; background:#e8e8e8; border:none; cursor:pointer; font-weight:500; font-size:0.75rem; }
+        .bottom-btn.active { background:#2b9aff; color:#fff; }
+        .store-status { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+        .store-status .indicator { width:12px; height:12px; border-radius:50%; }
+        .store-status .indicator.open { background:#4bcb6e; }
+        .store-status .indicator.closed { background:#ff3b30; }
+        .qr-img { margin:4px 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <h1>Панель управления</h1>
+            <p style="color:#888; margin-bottom:20px;">Введите данные для входа</p>
+            <input type="text" id="loginCode" placeholder="5-значный код">
+            <input type="password" id="loginPassword" placeholder="Пароль">
+            <button class="btn" onclick="adminLogin()">Войти</button>
+        </div>
+    </div>
 
-    let currentStaff = null;
-    let allProducts = [];
-    let storeConfig = JSON.parse(localStorage.getItem('store_config') || '{"open":true,"hours":"09:00 - 20:00","mapLink":""}');
+    <div id="adminInterface" class="hidden">
+        <div class="notification" id="notif"></div>
 
-    function saveStoreConfig() { localStorage.setItem('store_config', JSON.stringify(storeConfig)); }
-    function updateStoreUI() {
-        document.getElementById('storeIndicator').className = 'indicator ' + (storeConfig.open ? 'open' : 'closed');
-        document.getElementById('storeStatusText').innerText = storeConfig.open ? 'Открыто' : 'Закрыто';
-        document.getElementById('storeToggleBtn').innerText = storeConfig.open ? 'Закрыть' : 'Открыть';
-        document.getElementById('storeHours').innerText = 'Часы работы: ' + (storeConfig.hours || 'не указаны');
-    }
+        <div class="card" style="margin-bottom:8px;">
+            <div class="store-status">
+                <div class="indicator" id="storeIndicator"></div>
+                <span id="storeStatusText">Загрузка...</span>
+                <button class="btn-sm" id="storeToggleBtn" onclick="toggleStoreStatus()">Сменить</button>
+            </div>
+            <div style="font-size:0.8rem; color:#888;" id="storeHours">Часы: загрузка...</div>
+            <button class="btn-sm btn-outline" onclick="setStoreLink()" style="margin-top:8px;">Место продажи</button>
+        </div>
 
-    function toggleStoreStatus() {
-        storeConfig.open = !storeConfig.open;
-        saveStoreConfig();
-        updateStoreUI();
-        sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:storeConfig.mapLink });
-    }
+        <div class="tabs">
+            <div class="tab active" onclick="adminTab('orders')">Заказы</div>
+            <div class="tab" onclick="adminTab('products')">Товары</div>
+            <div class="tab" onclick="adminTab('clients')">Клиенты</div>
+            <div class="tab" onclick="adminTab('promos')">Скидки</div>
+            <div class="tab" onclick="adminTab('staff')">Сотрудники</div>
+        </div>
 
-    function setStoreLink() {
-        const link = prompt('Ссылка на место в картах:', storeConfig.mapLink || '');
-        if (link !== null) {
-            storeConfig.mapLink = link;
-            saveStoreConfig();
-            sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:link });
-        }
-    }
+        <div id="apanelOrders" class="card">
+            <h2>Заказы</h2>
+            <div class="field"><label>Код заказа</label><input type="text" id="pickupCodeInput" placeholder="6-значный код" maxlength="6"></div>
+            <button class="btn btn-sm" onclick="findOrderByCode()">Найти по коду</button>
+            <div id="orderSearchResult"></div>
+            <hr style="margin:16px 0; border-color:#ddd;">
+            <div id="aOrdersList"></div>
+        </div>
+        <div id="apanelProducts" class="card hidden">
+            <h2>Товары</h2>
+            <div class="field"><input type="text" id="aProductSearch" placeholder="Номер или название"></div>
+            <button class="btn" onclick="adminSearchProduct()">Найти</button>
+            <div id="aProductResult"></div>
+            <button class="btn-outline" onclick="adminAddProduct()" style="margin-top:12px;">Добавить товар</button>
+        </div>
+        <div id="apanelClients" class="card hidden">
+            <h2>Поиск клиента (4 цифры карты)</h2>
+            <div class="field"><input type="text" id="aClientCard" placeholder="4567" maxlength="4"></div>
+            <button class="btn" onclick="adminSearchClient()">Найти</button>
+            <div id="aClientResult"></div>
+        </div>
+        <div id="apanelPromos" class="card hidden">
+            <h2>Промокоды</h2>
+            <div id="aPromosList"></div>
+            <button class="btn-outline" onclick="adminAddPromo()" style="margin-top:12px;">Добавить</button>
+        </div>
+        <div id="apanelStaff" class="card hidden">
+            <h2>Сотрудники</h2>
+            <div id="aStaffList"></div>
+            <button class="btn-outline" onclick="adminAddStaff()" style="margin-top:12px;">Добавить</button>
+        </div>
+    </div>
+</div>
 
-    async function loadStoreConfig() {
-        const { data } = await sb.from('store_config').select('*').eq('id', 1).single();
-        if (data) {
-            storeConfig.open = data.open;
-            storeConfig.hours = data.hours || '09:00 - 20:00';
-            storeConfig.mapLink = data.map_link || '';
-        }
-        updateStoreUI();
-    }
-
-    async function adminLogin() {
-        const login = document.getElementById('loginCode').value.trim();
-        const password = document.getElementById('loginPassword').value.trim();
-        const { data } = await sb.from('store_staff').select('*').eq('login', login).eq('password', password).single();
-        if (data) {
-            currentStaff = data;
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('adminInterface').classList.remove('hidden');
-            document.getElementById('adminBottomBar').style.display = 'flex';
-            loadStoreConfig();
-            loadAllProducts();
-            adminTab('orders');
-            subscribeToOrders();
-        } else alert('Неверный код или пароль');
-    }
-
-    function subscribeToOrders() {
-        sb.channel('orders').on('postgres_changes', { event:'INSERT', schema:'public', table:'store_orders' }, payload => {
-            const o = payload.new;
-            showNotification('Новый заказ от ' + o.client_name + ' на ' + o.total + ' руб');
-            adminRenderOrders();
-        }).subscribe();
-    }
-
-    function showNotification(msg) {
-        const n = document.getElementById('notif');
-        n.innerText = msg; n.style.display = 'block';
-        setTimeout(() => n.style.display = 'none', 4000);
-    }
-
-    function adminTab(tab) {
-        document.querySelectorAll('#adminInterface .tab').forEach(t => t.classList.remove('active'));
-        document.querySelector(`#adminInterface .tab[onclick*="${tab}"]`)?.classList.add('active');
-        document.querySelectorAll('.bottom-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector(`.bottom-btn[onclick*="${tab}"]`)?.classList.add('active');
-        ['Clients','Products','Orders','Promos','Staff'].forEach(t => document.getElementById('apanel'+t).classList.add('hidden'));
-        document.getElementById('apanel'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.remove('hidden');
-        if (tab==='products') loadAllProducts().then(() => adminRenderProducts());
-        if (tab==='orders') adminRenderOrders();
-        if (tab==='promos') adminRenderPromos();
-        if (tab==='staff') adminRenderStaff();
-    }
-
-    // КЛИЕНТЫ
-    async function adminSearchClient() {
-        const digits = document.getElementById('aClientCard').value.trim();
-        if (digits.length !== 4) return alert('Введите 4 цифры');
-        const { data } = await sb.from('store_clients').select('*').ilike('card_number', '%'+digits);
-        const c = data?.[0];
-        document.getElementById('aClientResult').innerHTML = !c ? '<p>Не найден</p>' : `
-            <div class="search-result"><div><b>${c.name}</b><br>Карта: ${c.card_number}<br>Баллы: ${c.balance||0} | Статус: ${c.active?'Активна':'Не активна'}</div>
-            <div style="display:flex;gap:4px;">${!c.active?`<button class="btn btn-sm btn-green" onclick="adminActivateCard('${c.id}')">Активировать</button>`:''}
-            <button class="btn btn-sm" onclick="adminAddBonus('${c.id}')">+Баллы</button></div></div>`;
-    }
-    window.adminActivateCard = async function(id) { await sb.from('store_clients').update({ active:true }).eq('id', id); adminSearchClient(); };
-    window.adminAddBonus = async function(id) {
-        const amount = parseInt(prompt('Сколько баллов?'))||0;
-        if (amount <= 0) return;
-        const { data } = await sb.from('store_clients').select('balance').eq('id', id).single();
-        await sb.from('store_clients').update({ balance:(data?.balance||0)+amount }).eq('id', id);
-        adminSearchClient();
-    };
-
-    // ТОВАРЫ
-    async function loadAllProducts() { const { data } = await sb.from('store_products').select('*').order('code'); allProducts = data||[]; }
-    function adminRenderProducts(filter='') {
-        const filtered = filter ? allProducts.filter(p => p.code.toString()===filter || p.name.toLowerCase().includes(filter)) : allProducts;
-        document.getElementById('aProductResult').innerHTML = filtered.length===0 ? '<p>Ничего</p>' : filtered.map(p => `
-            <div class="search-result"><div><b>#${p.code} ${p.name}</b><br>${p.price} руб | Баллы: +${p.bonus_points||0} | Ост: ${p.stock}</div>
-            <div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="adminEditProduct(${p.id})" style="background:#ffc107;color:#000;">Ред</button><button class="btn btn-sm btn-danger" onclick="adminDeleteProduct(${p.id})">Уд</button></div></div>`).join('');
-    }
-    function adminSearchProduct() { adminRenderProducts(document.getElementById('aProductSearch').value.trim()); }
-    async function adminAddProduct() {
-        const name = prompt('Название:'); if (!name) return;
-        const code = parseInt(prompt('Код:')); if (isNaN(code)) return;
-        const price = parseInt(prompt('Цена:')); if (isNaN(price)) return;
-        const bonus = parseInt(prompt('Баллов за товар:'))||0;
-        const stock = parseInt(prompt('Остаток:'))||0;
-        await sb.from('store_products').insert({ code, name, price, bonus_points:bonus, stock });
-        loadAllProducts().then(() => adminRenderProducts());
-    }
-    window.adminEditProduct = async function(id) {
-        const p = allProducts.find(pr => pr.id===id); if (!p) return;
-        const name = prompt('Название:',p.name); if (name===null) return;
-        const price = parseInt(prompt('Цена:',p.price)); if (isNaN(price)) return;
-        const bonus = parseInt(prompt('Баллы:',p.bonus_points||0))||0;
-        const stock = parseInt(prompt('Остаток:',p.stock))||0;
-        await sb.from('store_products').update({ name, price, bonus_points:bonus, stock }).eq('id', id);
-        loadAllProducts().then(() => adminRenderProducts());
-    };
-    window.adminDeleteProduct = async function(id) { if (!confirm('Удалить?')) return; await sb.from('store_products').delete().eq('id', id); loadAllProducts().then(() => adminRenderProducts()); };
-
-    // ЗАКАЗЫ
-    const orderStatuses = ['new','accepted','preparing','done','cancelled'];
-    const statusNames = { new:'Новый', accepted:'Принят', preparing:'Готовится', done:'Выдан', cancelled:'Отменён' };
-
-    async function adminRenderOrders() {
-        const { data } = await sb.from('store_orders').select('*').order('created_at',{ascending:false});
-        document.getElementById('aOrdersList').innerHTML = !data||data.length===0 ? '<p>Нет заказов</p>' : data.map(o => `
-            <div class="search-result"><div><b>${o.client_name}</b><br>${o.total} руб | Баллы: +${o.total_bonus||0}<br><span class="status-badge status-${o.status}">${statusNames[o.status]||o.status}</span></div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                ${o.status==='new' ? `<button class="btn btn-sm btn-green" onclick="adminSetStatus(${o.id},'accepted')">Принять</button><button class="btn btn-sm btn-danger" onclick="adminSetStatus(${o.id},'cancelled')">Отклонить</button>` : ''}
-                ${o.status==='accepted' ? `<button class="btn btn-sm" onclick="adminSetStatus(${o.id},'preparing')">Готовить</button>` : ''}
-                ${o.status==='preparing' ? `<button class="btn btn-sm btn-green" onclick="adminSetStatus(${o.id},'done')">Выдан</button>` : ''}
-            </div></div>`).join('');
-    }
-    window.adminSetStatus = async function(id, status) {
-        if (status === 'accepted') {
-            const { data } = await sb.from('store_orders').select('*').eq('id', id).single();
-            if (data && data.items) {
-                for (const item of data.items) {
-                    const { data: prod } = await sb.from('store_products').select('stock').eq('code', item.product_code).single();
-                    if (prod) await sb.from('store_products').update({ stock: Math.max(0, prod.stock - item.quantity) }).eq('code', item.product_code);
-                }
-            }
-        }
-        await sb.from('store_orders').update({ status }).eq('id', id);
-        adminRenderOrders();
-    };
-
-    // ПРОМОКОДЫ
-    async function adminRenderPromos() {
-        const { data } = await sb.from('store_promos').select('*');
-        document.getElementById('aPromosList').innerHTML = !data||data.length===0 ? '<p>Нет промокодов</p>' : data.map(p => `
-            <div class="search-result"><div><b>${p.code}</b> — ${p.discount}%</div><button class="btn btn-sm btn-danger" onclick="adminDeletePromo(${p.id})">Уд</button></div>`).join('');
-    }
-    async function adminAddPromo() {
-        const code = prompt('Код:'); if (!code) return;
-        const discount = parseInt(prompt('Скидка %:')); if (isNaN(discount)) return;
-        await sb.from('store_promos').insert({ code, discount });
-        adminRenderPromos();
-    }
-    window.adminDeletePromo = async function(id) { await sb.from('store_promos').delete().eq('id', id); adminRenderPromos(); };
-
-    // СОТРУДНИКИ
-    async function adminRenderStaff() {
-        const { data } = await sb.from('store_staff').select('*');
-        document.getElementById('aStaffList').innerHTML = data?.map(s => `<div class="search-result"><div><b>${s.name}</b> (${s.role})</div></div>`).join('') || '<p>Нет</p>';
-    }
-    async function adminAddStaff() {
-        const name = prompt('Имя:'); if (!name) return;
-        const login = prompt('5-значный код:'); if (!login) return;
-        const password = prompt('Пароль:'); if (!password) return;
-        await sb.from('store_staff').insert({ name, login, password, role:'seller' });
-        adminRenderStaff();
-    }
-
-    updateStoreUI();
-    loadStoreConfig();
-</script>
-</body>
-</html>
+<div class="bottom-bar" id="adminBottomBar" style="display:none;">
+    <button class="bottom-btn active" onclick="adminTab('orders')">Заказы</button>
+    <button class="bottom-btn" onclick="adminTab('products')">Товары</button>
+    <button class="bottom-btn" onclick="adminTab('clients')">Клиенты</button>
+    <button class="bottom-btn" onclick="adminTab('promos')">Скидки</button>
+</div>
