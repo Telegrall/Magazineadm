@@ -42,7 +42,7 @@
         body.dark .tab { background:#2b3b4c; }
         body.dark .tab.active { background:#2b9aff; }
         .hidden { display:none !important; }
-        .search-result { padding:8px 12px; background:#f9f9f9; border-radius:8px; cursor:pointer; margin-bottom:4px; }
+        .search-result { padding:10px 12px; background:#f9f9f9; border-radius:10px; cursor:pointer; margin-bottom:6px; }
         .search-result:hover { background:#e8f0ff; }
         .msg-badge { background:#ff3b30; color:#fff; border-radius:10px; padding:2px 7px; font-size:0.7rem; margin-left:6px; }
         .login-screen { display:flex; align-items:center; justify-content:center; min-height:80vh; }
@@ -124,19 +124,18 @@
     applyTheme();
 
     // ======== ВХОД ========
-    function adminLogin() {
+    async function adminLogin() {
         const login = document.getElementById('loginCode').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
-        const staff = JSON.parse(localStorage.getItem('store_staff') || '[]');
-        const found = staff.find(s => s.login === login && s.password === password);
-        if (found) {
-            currentStaff = found;
+        const { data } = await sb.from('store_staff').select('*').eq('login', login).eq('password', password).single();
+        if (data) {
+            currentStaff = data;
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminInterface').classList.remove('hidden');
             document.getElementById('themeBtn').classList.remove('hidden');
-            document.getElementById('staffInfo').innerText = 'Вы вошли как: ' + found.name + ' (' + (found.access === 'full' ? 'Полный доступ' : 'Ограниченный') + ')';
-            if (found.access !== 'full') {
-                document.getElementById('panelStaff').classList.add('hidden');
+            document.getElementById('staffInfo').innerText = 'Вы вошли как: ' + data.name + ' (' + (data.access === 'full' ? 'Полный доступ' : 'Ограниченный') + ')';
+            if (data.access !== 'full') {
+                document.querySelector('[onclick*="switchPanel(\'staff\')"]').style.display = 'none';
             }
             renderStaff();
             renderMessages();
@@ -147,39 +146,42 @@
 
     function switchPanel(panel) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelector(`.tab[onclick*="${panel}"]`).classList.add('active');
+        const targetTab = document.querySelector(`.tab[onclick*="${panel}"]`);
+        if (targetTab) targetTab.classList.add('active');
         ['Clients','Products','Orders','Staff','Messages'].forEach(p => document.getElementById('panel' + p).classList.add('hidden'));
         document.getElementById('panel' + panel.charAt(0).toUpperCase() + panel.slice(1)).classList.remove('hidden');
         if (panel === 'orders') renderOrders();
         if (panel === 'messages') renderMessages();
+        if (panel === 'staff') renderStaff();
     }
 
     // ======== КЛИЕНТЫ ========
-    const clients = [
-        { name:'Анна Петрова', phone:'+79001234567', card:'4276 0000 1111 2222', active:true, balance:150, email:'anna@example.com' },
-        { name:'Иван Сидоров', phone:'+79161234567', card:'4276 0000 3333 4444', active:false, balance:0, email:'' }
-    ];
-
-    function searchClient() {
+    async function searchClient() {
         const phone = document.getElementById('clientPhone').value.trim().replace(/\D/g, '');
         if (!phone) return alert('Введите номер телефона');
-        let found = clients.find(c => c.phone.replace(/\D/g, '') === phone);
-        if (!found && phone.length >= 4) found = clients.find(c => c.phone.replace(/\D/g, '').endsWith(phone));
+        
+        let { data } = await sb.from('store_clients').select('*').eq('phone', '+' + phone).single();
+        if (!data && phone.length >= 4) {
+            const { data: all } = await sb.from('store_clients').select('*');
+            data = all?.find(c => c.phone.replace(/\D/g, '').endsWith(phone));
+        }
+        
         const container = document.getElementById('clientResult');
-        if (!found) { container.innerHTML = '<p>Клиент не найден.</p>'; return; }
+        if (!data) { container.innerHTML = '<p>Клиент не найден.</p>'; return; }
+        
         container.innerHTML = `
             <div class="result">
-                <b>${found.name}</b><br>Телефон: ${found.phone}<br>Карта: ${found.card}<br>
-                Статус: <span class="status-badge ${found.active ? 'status-active' : 'status-inactive'}">${found.active ? 'Активирована' : 'Не активирована'}</span><br>
-                Баллы: ${found.balance}<br>Почта: ${found.email || 'не указана'}
+                <b>${data.name}</b><br>Телефон: ${data.phone}<br>Карта: ${data.card_number || '—'}<br>
+                Статус: <span class="status-badge ${data.active ? 'status-active' : 'status-inactive'}">${data.active ? 'Активирована' : 'Не активирована'}</span><br>
+                Баллы: ${data.balance}<br>Почта: ${data.email || 'не указана'}
             </div>
-            ${!found.active ? `
+            ${!data.active ? `
                 <div class="instruction"><b>Активация:</b><br>1. Скажите: «Уважаемый покупатель, мы вам позвоним. Покажите, что я звоню».<br>2. Нажмите «Позвонить».<br>3. Если всё совпадает — «Активировать».</div>
-                <button class="btn btn-call" onclick="callClient('${found.phone}')">Позвонить</button>
-                <button class="btn btn-green" onclick="activateClient('${found.phone}')">Активировать карту</button>
+                <button class="btn btn-call" onclick="callClient('${data.phone}')">Позвонить</button>
+                <button class="btn btn-green" onclick="activateClient('${data.id}')">Активировать карту</button>
             ` : `
                 <div class="field" style="margin-top:12px;"><label>Начислить бонусы</label><input type="number" id="bonusAmount" placeholder="Сумма"></div>
-                <button class="btn btn-green" onclick="addBonus('${found.phone}')">Начислить бонусы</button>
+                <button class="btn btn-green" onclick="addBonus('${data.id}')">Начислить бонусы</button>
                 <div class="field" style="margin-top:12px;"><label>Сумма покупки</label><input type="number" id="purchaseAmount" placeholder="0"></div>
                 <div class="field"><label>Скидка (%)</label><input type="number" id="purchaseDiscount" value="0" max="100"></div>
                 <button class="btn" onclick="processPurchase()">Рассчитать</button>
@@ -188,65 +190,149 @@
     }
 
     function callClient(phone) { window.location.href = 'tel:' + phone.replace(/\D/g, ''); }
-    function activateClient(phone) { const c = clients.find(cl => cl.phone === phone); if (c) { c.active = true; alert('Карта активирована!'); searchClient(); } }
-    function addBonus(phone) {
-        const amount = parseInt(document.getElementById('bonusAmount').value) || 0;
-        const c = clients.find(cl => cl.phone === phone);
-        if (c && amount > 0) { c.balance += amount; alert('Начислено ' + amount + ' баллов. Баланс: ' + c.balance); searchClient(); }
+
+    async function activateClient(id) {
+        await sb.from('store_clients').update({ active: true }).eq('id', id);
+        alert('Карта активирована!');
+        searchClient();
     }
-    function processPurchase() {
-        const total = parseInt(document.getElementById('purchaseAmount').value) || 0;
-        const discount = parseInt(document.getElementById('purchaseDiscount').value) || 0;
-        const final = total * (1 - discount / 100);
-        const phone = document.getElementById('clientPhone').value.trim();
-        const client = clients.find(c => c.phone === phone);
-        const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
-        orders.push({ client: client ? client.name : 'Неизвестный', phone, date: new Date().toLocaleString('ru'), time: prompt('На какое время?') || 'не указано', items: [{ id: 101, qty: 1 }], receiptSent: false, stockUpdated: false });
-        localStorage.setItem('store_orders', JSON.stringify(orders));
-        alert('Итого: ' + final + ' руб');
+
+    async function addBonus(id) {
+        const amount = parseInt(document.getElementById('bonusAmount').value) || 0;
+        if (amount <= 0) return;
+        const { data } = await sb.from('store_clients').select('balance').eq('id', id).single();
+        if (data) {
+            await sb.from('store_clients').update({ balance: data.balance + amount }).eq('id', id);
+            alert('Начислено ' + amount + ' баллов');
+            searchClient();
+        }
     }
 
     // ======== ТОВАРЫ ========
-    const products = [{ id: 101, name: 'Блокнот', price: 150, stock: 20 }, { id: 102, name: 'Сквиш', price: 200, stock: 15 }];
-    function searchProduct() {
+    async function searchProduct() {
         const query = document.getElementById('productSearch').value.trim().toLowerCase();
-        const found = products.filter(p => p.id.toString() === query || p.name.toLowerCase().includes(query));
-        document.getElementById('productResult').innerHTML = found.length === 0 ? '<p>Ничего не найдено</p>' : found.map(p => `<div class="search-result"><b>#${p.id}</b> - ${p.name} (${p.price} руб, ${p.stock} шт)</div>`).join('');
+        const { data } = await sb.from('store_products').select('*');
+        const found = data?.filter(p => p.code.toString() === query || p.name.toLowerCase().includes(query)) || [];
+        document.getElementById('productResult').innerHTML = found.length === 0 ? '<p>Ничего не найдено</p>' :
+            found.map(p => `
+                <div class="search-result" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div><b>#${p.code} ${p.name}</b><br><small>${p.price} руб | Осталось: ${p.stock} шт</small></div>
+                    <div style="display:flex; gap:4px;">
+                        <button class="btn btn-small" onclick="editProduct(${p.id})" style="background:#ffc107; color:#000; padding:4px 8px;">Ред</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteProduct(${p.id})" style="padding:4px 8px;">Удал</button>
+                    </div>
+                </div>
+            `).join('');
     }
-    function addProduct() { const name = prompt('Название:'); const price = prompt('Цена:'); if (name && price) { products.push({ id: Math.max(...products.map(p => p.id)) + 1, name, price: parseInt(price), stock: 0 }); alert('Добавлено'); } }
+
+    async function addProduct() {
+        const name = prompt('Название:');
+        if (!name) return;
+        const code = parseInt(prompt('Код товара (уникальное число):'));
+        if (isNaN(code)) return;
+        const price = parseInt(prompt('Цена (руб):'));
+        if (isNaN(price)) return;
+        const stock = parseInt(prompt('Количество на складе:')) || 0;
+        
+        await sb.from('store_products').insert({ code, name, price, stock });
+        alert('Товар добавлен');
+        searchProduct();
+    }
+
+    window.editProduct = async function(id) {
+        const { data } = await sb.from('store_products').select('*').eq('id', id).single();
+        if (!data) return;
+        const name = prompt('Название:', data.name);
+        if (name === null) return;
+        const price = parseInt(prompt('Цена:', data.price));
+        if (isNaN(price)) return;
+        const stock = parseInt(prompt('Остаток:', data.stock)) || 0;
+        await sb.from('store_products').update({ name, price, stock }).eq('id', id);
+        alert('Обновлено');
+        searchProduct();
+    };
+
+    window.deleteProduct = async function(id) {
+        if (!confirm('Удалить товар?')) return;
+        await sb.from('store_products').delete().eq('id', id);
+        alert('Удалён');
+        searchProduct();
+    };
 
     // ======== ЗАКАЗЫ ========
-    function renderOrders() {
-        const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
-        document.getElementById('ordersList').innerHTML = orders.length === 0 ? '<p>Нет заказов</p>' : orders.map((o, i) => `<div class="search-result"><b>${o.client}</b> — ${o.time}<br>${o.items.map(it => `#${it.id} x${it.qty}`).join(', ')}<br><small>${o.date}</small>
-            ${!o.receiptSent ? `<button class="btn btn-small" onclick="sendReceipt(${i})">Отправить чек</button>` : '<small>Чек отправлен</small>'}
-            ${!o.stockUpdated ? `<button class="btn btn-small btn-green" onclick="updateStock(${i})">Списать товар</button>` : '<small>Списано</small>'}
-        </div>`).join('');
+    async function renderOrders() {
+        const { data } = await sb.from('store_orders').select('*').order('created_at', { ascending: false });
+        document.getElementById('ordersList').innerHTML = !data || data.length === 0 ? '<p>Нет заказов</p>' :
+            data.map(o => `
+                <div class="search-result">
+                    <b>${o.client_name}</b> — ${o.order_time}<br>
+                    <small>${new Date(o.created_at).toLocaleString('ru')}</small>
+                    ${!o.receipt_sent ? `<button class="btn btn-small" onclick="sendReceipt(${o.id})">Отправить чек</button>` : '<small>Чек отправлен</small>'}
+                </div>
+            `).join('');
     }
-    function sendReceipt(i) { const orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); const o = orders[i]; const body = 'Чек по заказу от ' + o.date + '\n\n' + o.items.map(it => '#' + it.id + ' - ' + it.qty + ' шт').join('\n') + '\n\nСпасибо!'; window.location.href = 'mailto:?subject=Чек&body=' + encodeURIComponent(body); orders[i].receiptSent = true; localStorage.setItem('store_orders', JSON.stringify(orders)); renderOrders(); }
-    function updateStock(i) { const orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); orders[i].stockUpdated = true; localStorage.setItem('store_orders', JSON.stringify(orders)); alert('Товар списан'); renderOrders(); }
+
+    async function sendReceipt(id) {
+        const { data } = await sb.from('store_orders').select('*').eq('id', id).single();
+        if (!data) return;
+        const { data: client } = await sb.from('store_clients').select('email').eq('phone', data.client_phone).single();
+        const email = client?.email || prompt('Почта клиента:');
+        if (!email) return;
+        const body = 'Чек по заказу от ' + new Date(data.created_at).toLocaleString('ru') + '\n\nСпасибо за покупку!';
+        window.location.href = 'mailto:' + email + '?subject=Чек&body=' + encodeURIComponent(body);
+        await sb.from('store_orders').update({ receipt_sent: true }).eq('id', id);
+        renderOrders();
+    }
 
     // ======== СОТРУДНИКИ ========
-    function renderStaff() {
+    async function renderStaff() {
         if (!currentStaff || currentStaff.access !== 'full') return;
-        const staff = JSON.parse(localStorage.getItem('store_staff') || '[]');
-        document.getElementById('staffList').innerHTML = staff.map((s, i) => `<div class="search-result" style="display:flex;justify-content:space-between;"><div><b>${s.name}</b> (${s.access === 'full' ? 'Полный' : 'Ограниченный'})</div><button class="btn-danger" onclick="deleteStaff(${i})" style="width:auto;padding:6px 12px;">Удалить</button></div>`).join('') || '<p>Нет сотрудников</p>';
+        const { data } = await sb.from('store_staff').select('*');
+        document.getElementById('staffList').innerHTML = data?.map(s => `
+            <div class="search-result" style="display:flex; justify-content:space-between;">
+                <div><b>${s.name}</b> (${s.access === 'full' ? 'Полный' : 'Ограниченный'})</div>
+                <button class="btn-danger" onclick="deleteStaff(${s.id})" style="padding:4px 8px;">Удалить</button>
+            </div>
+        `).join('') || '<p>Нет сотрудников</p>';
     }
-    function addStaff() { if (!currentStaff || currentStaff.access !== 'full') return; const name = prompt('Имя:'); const login = prompt('5-значный код:'); const password = prompt('Пароль:'); const access = confirm('Полный доступ?') ? 'full' : 'limited'; if (name && login && login.length === 5) { const staff = JSON.parse(localStorage.getItem('store_staff') || '[]'); staff.push({ name, login, password, access }); localStorage.setItem('store_staff', JSON.stringify(staff)); renderStaff(); } }
-    function deleteStaff(i) { const staff = JSON.parse(localStorage.getItem('store_staff') || '[]'); staff.splice(i, 1); localStorage.setItem('store_staff', JSON.stringify(staff)); renderStaff(); }
+
+    async function addStaff() {
+        if (!currentStaff || currentStaff.access !== 'full') return;
+        const name = prompt('Имя:');
+        if (!name) return;
+        const login = prompt('5-значный код:');
+        if (!login || login.length !== 5) return;
+        const password = prompt('Пароль:');
+        if (!password) return;
+        const access = confirm('Полный доступ? (OK = да, Отмена = только продажи)') ? 'full' : 'limited';
+        await sb.from('store_staff').insert({ name, login, password, access });
+        renderStaff();
+    }
+
+    async function deleteStaff(id) {
+        await sb.from('store_staff').delete().eq('id', id);
+        renderStaff();
+    }
 
     // ======== СООБЩЕНИЯ ========
-    function renderMessages() {
-        const messages = JSON.parse(localStorage.getItem('store_messages') || '[]');
-        document.getElementById('messagesList').innerHTML = messages.length === 0 ? '<p>Нет сообщений</p>' : messages.map((m, i) => `<div class="search-result"><b>${m.from}</b><br>${m.text}<br><small>${m.date}</small><button class="btn-danger" onclick="deleteMsg(${i})" style="width:auto;padding:4px 8px;">Удалить</button></div>`).join('');
-        document.getElementById('msgBadge').innerText = messages.length;
+    async function renderMessages() {
+        const { data } = await sb.from('store_messages').select('*').order('created_at', { ascending: false });
+        document.getElementById('messagesList').innerHTML = !data || data.length === 0 ? '<p>Нет сообщений</p>' :
+            data.map(m => `
+                <div class="search-result">
+                    <b>${m.from_name}</b><br>${m.text}<br><small>${new Date(m.created_at).toLocaleString('ru')}</small>
+                    <button class="btn-danger" onclick="deleteMsg(${m.id})" style="padding:4px 8px;">Удалить</button>
+                </div>
+            `).join('');
+        document.getElementById('msgBadge').innerText = data?.length || 0;
     }
-    function deleteMsg(i) { const messages = JSON.parse(localStorage.getItem('store_messages') || '[]'); messages.splice(i, 1); localStorage.setItem('store_messages', JSON.stringify(messages)); renderMessages(); }
 
-    // Инициализация
-    if (!localStorage.getItem('store_staff')) {
-        localStorage.setItem('store_staff', JSON.stringify([{ name:'Максим', login:'12345', password:'admin123', access:'full' }]));
+    async function deleteMsg(id) {
+        await sb.from('store_messages').delete().eq('id', id);
+        renderMessages();
     }
+
+    renderMessages();
 </script>
 </body>
 </html>
