@@ -1,4 +1,133 @@
-<script>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Магазин — Панель управления</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system, sans-serif; }
+        body { background:#f5f5f5; min-height:100vh; padding:16px; }
+        body.dark { background:#0e1621; color:#eef4ff; }
+        body.dark .card { background:#1f2c38; border-color:#2b3b4c; }
+        body.dark .field input, body.dark .field select { background:#0e1621; border-color:#2b3b4c; color:#fff; }
+        body.dark .result { background:#17212b; }
+        body.dark .instruction { background:#2a2a15; }
+        body.dark .search-result { background:#17212b; }
+        body.dark .search-result:hover { background:#1a2a3a; }
+        .container { max-width:500px; margin:0 auto; }
+        h1, h2 { color:#2b9aff; margin-bottom:16px; }
+        .card { background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; box-shadow:0 2px 12px rgba(0,0,0,0.08); border:1px solid #eee; }
+        .field { margin-bottom:12px; }
+        .field label { display:block; font-size:0.8rem; color:#666; margin-bottom:4px; }
+        body.dark .field label { color:#8e9eae; }
+        .field input, .field select { width:100%; padding:10px 14px; border:1px solid #ddd; border-radius:12px; font-size:0.9rem; }
+        .btn { width:100%; background:#2b9aff; border:none; border-radius:14px; padding:12px; color:#fff; font-weight:600; cursor:pointer; margin-bottom:8px; }
+        .btn-outline { background:transparent; border:1px solid #2b9aff; color:#2b9aff; }
+        .btn-green { background:#4bcb6e; }
+        .btn-danger { background:#ff3b30; }
+        .btn-call { background:#ff8c00; }
+        .btn-theme { position:fixed; top:16px; right:16px; background:#1f2c38; border:none; color:#fff; padding:8px 12px; border-radius:20px; cursor:pointer; font-size:0.8rem; z-index:100; }
+        body.dark .btn-theme { background:#fff; color:#000; }
+        .result { padding:12px; background:#f0f8ff; border-radius:12px; margin:12px 0; font-size:0.9rem; line-height:1.5; }
+        .result b { color:#2b9aff; }
+        .status-badge { display:inline-block; padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:600; }
+        .status-active { background:#d4f5d4; color:#1a7a1a; }
+        .status-inactive { background:#ffe0e0; color:#c0392b; }
+        .status-new { background:#d4e4ff; color:#1a4a8a; }
+        .status-delivering { background:#fff3d4; color:#8a6a1a; }
+        .status-done { background:#d4f5d4; color:#1a7a1a; }
+        .status-cancelled { background:#ffe0e0; color:#c0392b; }
+        .instruction { background:#fff9e0; border-left:3px solid #ffc107; padding:12px; border-radius:8px; margin:12px 0; font-size:0.8rem; line-height:1.6; }
+        .instruction b { color:#e67e00; }
+        .tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+        .tab { flex:1; min-width:60px; text-align:center; padding:10px; background:#e8e8e8; border-radius:14px; cursor:pointer; font-weight:500; font-size:0.75rem; }
+        .tab.active { background:#2b9aff; color:#fff; }
+        body.dark .tab { background:#2b3b4c; }
+        body.dark .tab.active { background:#2b9aff; }
+        .hidden { display:none !important; }
+        .search-result { padding:10px 12px; background:#f9f9f9; border-radius:10px; cursor:pointer; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
+        .search-result:hover { background:#e8f0ff; }
+        .msg-badge { background:#ff3b30; color:#fff; border-radius:10px; padding:2px 7px; font-size:0.7rem; margin-left:6px; }
+        .login-screen { display:flex; align-items:center; justify-content:center; min-height:80vh; }
+        .login-card { background:#fff; border-radius:24px; padding:30px; width:100%; max-width:350px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+        body.dark .login-card { background:#1f2c38; }
+        .login-card input { width:100%; padding:12px; margin-bottom:12px; border:1px solid #ddd; border-radius:12px; }
+        body.dark .login-card input { background:#0e1621; border-color:#2b3b4c; color:#fff; }
+        .perm-label { display:inline-flex; align-items:center; gap:4px; font-size:0.7rem; margin-right:8px; }
+        .delivery-rules { background:#f0f8ff; border-radius:12px; padding:10px; margin-bottom:12px; font-size:0.8rem; }
+        body.dark .delivery-rules { background:#1a2a3a; }
+    </style>
+</head>
+<body>
+<button class="btn-theme hidden" id="themeBtn" onclick="toggleTheme()">Тема</button>
+
+<div class="container" id="mainContainer">
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <h1>Панель управления</h1>
+            <p style="color:#888; margin-bottom:20px;">Введите данные для входа</p>
+            <input type="text" id="loginCode" placeholder="5-значный код">
+            <input type="password" id="loginPassword" placeholder="Пароль">
+            <button class="btn" onclick="adminLogin()">Войти</button>
+        </div>
+    </div>
+
+    <div id="adminInterface" class="hidden">
+        <h1>Панель управления</h1>
+        <div id="staffInfo" style="font-size:0.8rem; color:#8e9eae; margin-bottom:12px;"></div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchPanel('clients')">Клиенты</div>
+            <div class="tab" onclick="switchPanel('products')">Товары</div>
+            <div class="tab" onclick="switchPanel('orders')">Заказы</div>
+            <div class="tab" onclick="switchPanel('delivery')">Доставка</div>
+            <div class="tab" onclick="switchPanel('staff')">Сотрудники</div>
+            <div class="tab" onclick="switchPanel('messages')">Сообщения</div>
+        </div>
+
+        <div id="panelClients" class="card">
+            <h2>Поиск клиента (последние 4 цифры)</h2>
+            <div class="field"><label>4 цифры номера</label><input type="text" id="clientPhone" placeholder="4567" maxlength="4"></div>
+            <button class="btn" onclick="searchClient()">Найти</button>
+            <div id="clientResult"></div>
+        </div>
+
+        <div id="panelProducts" class="card hidden">
+            <h2>Товары</h2>
+            <div class="field"><label>Поиск</label><input type="text" id="productSearch" placeholder="Номер или название"></div>
+            <button class="btn" onclick="searchProduct()">Найти</button>
+            <div id="productResult"></div>
+            <button class="btn-outline" onclick="addProduct()" style="margin-top:12px;">Добавить товар</button>
+        </div>
+
+        <div id="panelOrders" class="card hidden">
+            <h2>Заказы</h2>
+            <div id="ordersList"></div>
+        </div>
+
+        <div id="panelDelivery" class="card hidden">
+            <h2>Доставка</h2>
+            <div class="delivery-rules">
+                Правила доставки:<br>
+                • Заказ до 250 руб — доставка 50 руб<br>
+                • Заказ от 250 руб — доставка бесплатно
+            </div>
+            <div id="deliveryList"></div>
+        </div>
+
+        <div id="panelStaff" class="card hidden">
+            <h2>Сотрудники</h2>
+            <div id="staffList"></div>
+            <button class="btn-outline" onclick="addStaff()" style="margin-top:12px;">Добавить</button>
+        </div>
+
+        <div id="panelMessages" class="card hidden">
+            <h2>Сообщения</h2>
+            <div id="messagesList"></div>
+        </div>
+    </div>
+</div><script>
     const SUPABASE_URL = "https://iiuahjmpszfcgtwapidt.supabase.co";
     const SUPABASE_KEY = "sb_publishable_iFYpqkv4D0qEOj4Dn1X9Nw_OH9d5Bji";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -11,7 +140,6 @@
     function toggleTheme() { currentTheme = currentTheme === 'light' ? 'dark' : 'light'; localStorage.setItem('store_admin_theme', currentTheme); applyTheme(); }
     applyTheme();
 
-    // ======== ВХОД ========
     async function adminLogin() {
         const login = document.getElementById('loginCode').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
@@ -21,228 +149,161 @@
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminInterface').classList.remove('hidden');
             document.getElementById('themeBtn').classList.remove('hidden');
-            document.getElementById('staffInfo').innerText = 'Вы вошли как: ' + data.name + ' (' + (data.access === 'full' ? 'Полный доступ' : 'Ограниченный') + ')';
-            if (data.access !== 'full') {
-                document.querySelector('[onclick*="switchPanel(\'staff\')"]').style.display = 'none';
-            }
-            renderStaff();
-            renderMessages();
-            loadAllProducts();
-        } else {
-            alert('Неверный код или пароль');
-        }
+            document.getElementById('staffInfo').innerText = 'Вы: ' + data.name + ' (' + data.role + ')';
+            loadAllProducts(); renderStaff(); renderMessages();
+        } else { alert('Неверный код или пароль'); }
     }
 
     function switchPanel(panel) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         const targetTab = document.querySelector(`.tab[onclick*="${panel}"]`);
         if (targetTab) targetTab.classList.add('active');
-        ['Clients','Products','Orders','Staff','Messages'].forEach(p => document.getElementById('panel' + p).classList.add('hidden'));
-        document.getElementById('panel' + panel.charAt(0).toUpperCase() + panel.slice(1)).classList.remove('hidden');
-        if (panel === 'orders') renderOrders();
-        if (panel === 'messages') renderMessages();
-        if (panel === 'staff') renderStaff();
-        if (panel === 'products') loadAllProducts();
+        ['Clients','Products','Orders','Delivery','Staff','Messages'].forEach(p => document.getElementById('panel'+p).classList.add('hidden'));
+        document.getElementById('panel'+panel.charAt(0).toUpperCase()+panel.slice(1)).classList.remove('hidden');
+        if (panel==='products') loadAllProducts();
+        if (panel==='orders') renderOrders();
+        if (panel==='delivery') renderDelivery();
+        if (panel==='staff') renderStaff();
+        if (panel==='messages') renderMessages();
     }
 
-    // ======== КЛИЕНТЫ ========
+    // КЛИЕНТЫ
     async function searchClient() {
-        const phone = document.getElementById('clientPhone').value.trim().replace(/\D/g, '');
-        if (!phone) return alert('Введите номер телефона');
-        
-        let { data } = await sb.from('store_clients').select('*').eq('phone', '+' + phone).single();
-        if (!data && phone.length >= 4) {
-            const { data: all } = await sb.from('store_clients').select('*');
-            data = all?.find(c => c.phone.replace(/\D/g, '').endsWith(phone));
-        }
-        
+        const digits = document.getElementById('clientPhone').value.trim();
+        if (digits.length !== 4) return alert('Введите ровно 4 цифры');
+        const { data } = await sb.from('store_clients').select('*');
+        const found = data?.filter(c => c.phone && c.phone.replace(/\D/g,'').endsWith(digits));
         const container = document.getElementById('clientResult');
-        if (!data) { container.innerHTML = '<p>Клиент не найден.</p>'; return; }
-        
-        container.innerHTML = `
-            <div class="result">
-                <b>${data.name}</b><br>Телефон: ${data.phone}<br>Карта: ${data.card_number || '—'}<br>
-                Статус: <span class="status-badge ${data.active ? 'status-active' : 'status-inactive'}">${data.active ? 'Активирована' : 'Не активирована'}</span><br>
-                Баллы: ${data.balance}<br>Почта: ${data.email || 'не указана'}
-            </div>
-            ${!data.active ? `
-                <div class="instruction"><b>Активация:</b><br>1. Скажите: «Уважаемый покупатель, мы вам позвоним. Покажите, что я звоню».<br>2. Нажмите «Позвонить».<br>3. Если всё совпадает — «Активировать».</div>
-                <button class="btn btn-call" onclick="callClient('${data.phone}')">Позвонить</button>
-                <button class="btn btn-green" onclick="activateClient('${data.id}')">Активировать карту</button>
-            ` : `
-                <div class="field" style="margin-top:12px;"><label>Начислить бонусы</label><input type="number" id="bonusAmount" placeholder="Сумма"></div>
-                <button class="btn btn-green" onclick="addBonus('${data.id}')">Начислить бонусы</button>
-                <div class="field" style="margin-top:12px;"><label>Сумма покупки</label><input type="number" id="purchaseAmount" placeholder="0"></div>
-                <div class="field"><label>Скидка (%)</label><input type="number" id="purchaseDiscount" value="0" max="100"></div>
-                <button class="btn" onclick="processPurchase()">Рассчитать</button>
-            `}
-        `;
+        if (!found || found.length===0) { container.innerHTML = '<p>Не найден</p>'; return; }
+        container.innerHTML = found.map(c => `<div class="result"><b>${c.name}</b><br>Телефон: ${c.phone}<br>Карта: ${c.card_number||'—'}<br>Баллы: ${c.balance}</div>`).join('');
     }
 
-    function callClient(phone) { window.location.href = 'tel:' + phone.replace(/\D/g, ''); }
-
-    async function activateClient(id) {
-        await sb.from('store_clients').update({ active: true }).eq('id', id);
-        alert('Карта активирована!');
-        searchClient();
-    }
-
-    async function addBonus(id) {
-        const amount = parseInt(document.getElementById('bonusAmount').value) || 0;
-        if (amount <= 0) return;
-        const { data } = await sb.from('store_clients').select('balance').eq('id', id).single();
-        if (data) {
-            await sb.from('store_clients').update({ balance: data.balance + amount }).eq('id', id);
-            alert('Начислено ' + amount + ' баллов');
-            searchClient();
-        }
-    }
-
-    // ======== ТОВАРЫ ========
-    async function loadAllProducts() {
-        const { data } = await sb.from('store_products').select('*').order('code');
-        allProducts = data || [];
-        renderAllProducts();
-    }
-
-    function renderAllProducts(filter = '') {
+    // ТОВАРЫ
+    async function loadAllProducts() { const { data } = await sb.from('store_products').select('*').order('code'); allProducts = data||[]; renderAllProducts(); }
+    function renderAllProducts(filter='') {
         const container = document.getElementById('productResult');
-        const filtered = filter ? allProducts.filter(p => 
-            p.code.toString() === filter || p.name.toLowerCase().includes(filter.toLowerCase())
-        ) : allProducts;
-
-        if (filtered.length === 0) {
-            container.innerHTML = '<p style="color:#888;">Ничего не найдено</p>';
-            return;
-        }
-
-        container.innerHTML = filtered.map(p => `
-            <div class="search-result">
-                <div>
-                    <b>#${p.code} ${p.name}</b><br>
-                    <small>${p.price} руб | Осталось: ${p.stock} шт</small>
-                </div>
-                <div style="display:flex; gap:4px;">
-                    <button class="btn btn-small" onclick="editProduct(${p.id})" style="background:#ffc107; color:#000; padding:4px 8px;">Изм</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteProduct(${p.id})" style="padding:4px 8px;">Уд</button>
-                </div>
-            </div>
-        `).join('');
+        const filtered = filter ? allProducts.filter(p => p.code.toString()===filter || p.name.toLowerCase().includes(filter.toLowerCase())) : allProducts;
+        if (filtered.length===0) { container.innerHTML = '<p>Ничего не найдено</p>'; return; }
+        container.innerHTML = filtered.map(p => `<div class="search-result"><div><b>#${p.code} ${p.name}</b><br><small>${p.price} руб | Ост: ${p.stock}</small></div><div style="display:flex;gap:4px;"><button class="btn btn-small" onclick="editProduct(${p.id})" style="background:#ffc107;color:#000;padding:4px 8px;">Ред</button><button class="btn btn-small btn-danger" onclick="deleteProduct(${p.id})" style="padding:4px 8px;">Уд</button></div></div>`).join('');
     }
-
-    function searchProduct() {
-        const query = document.getElementById('productSearch').value.trim();
-        renderAllProducts(query);
-    }
-
+    function searchProduct() { renderAllProducts(document.getElementById('productSearch').value.trim()); }
     async function addProduct() {
-        const name = prompt('Название:');
-        if (!name) return;
-        const code = parseInt(prompt('Код товара (уникальное число):'));
-        if (isNaN(code)) return;
-        const price = parseInt(prompt('Цена (руб):'));
-        if (isNaN(price)) return;
-        const stock = parseInt(prompt('Количество на складе:')) || 0;
-        await sb.from('store_products').insert({ code, name, price, stock });
-        alert('Товар добавлен');
-        loadAllProducts();
+        const name = prompt('Название:'); if (!name) return;
+        const code = parseInt(prompt('Код:')); if (isNaN(code)) return;
+        const price = parseInt(prompt('Цена:')); if (isNaN(price)) return;
+        const stock = parseInt(prompt('Остаток:'))||0;
+        await sb.from('store_products').insert({ code, name, price, stock }); alert('Добавлено'); loadAllProducts();
     }
-
     window.editProduct = async function(id) {
-        const product = allProducts.find(p => p.id === id);
-        if (!product) return;
-        const name = prompt('Название:', product.name);
-        if (name === null) return;
-        const price = parseInt(prompt('Цена:', product.price));
-        if (isNaN(price)) return;
-        const stock = parseInt(prompt('Остаток:', product.stock)) || 0;
-        await sb.from('store_products').update({ name, price, stock }).eq('id', id);
-        alert('Обновлено');
-        loadAllProducts();
+        const p = allProducts.find(pr=>pr.id===id); if (!p) return;
+        const name = prompt('Название:', p.name); if (name===null) return;
+        const price = parseInt(prompt('Цена:', p.price)); if (isNaN(price)) return;
+        const stock = parseInt(prompt('Остаток:', p.stock))||0;
+        await sb.from('store_products').update({ name, price, stock }).eq('id', id); alert('Обновлено'); loadAllProducts();
     };
+    window.deleteProduct = async function(id) { if (!confirm('Удалить?')) return; await sb.from('store_products').delete().eq('id', id); alert('Удалён'); loadAllProducts(); };
 
-    window.deleteProduct = async function(id) {
-        if (!confirm('Удалить товар?')) return;
-        await sb.from('store_products').delete().eq('id', id);
-        alert('Удалён');
-        loadAllProducts();
-    };
-
-    // ======== ЗАКАЗЫ ========
+    // ЗАКАЗЫ
     async function renderOrders() {
         const { data } = await sb.from('store_orders').select('*').order('created_at', { ascending: false });
-        document.getElementById('ordersList').innerHTML = !data || data.length === 0 ? '<p>Нет заказов</p>' :
-            data.map(o => `
-                <div class="search-result">
-                    <div>
-                        <b>${o.client_name}</b> — ${o.order_time}<br>
-                        <small>${new Date(o.created_at).toLocaleString('ru')}</small>
-                    </div>
-                    ${!o.receipt_sent ? `<button class="btn btn-small" onclick="sendReceipt(${o.id})">Чек</button>` : '<small>Отправлен</small>'}
-                </div>
-            `).join('');
+        document.getElementById('ordersList').innerHTML = !data||data.length===0 ? '<p>Нет заказов</p>' :
+            data.map(o => {
+                const deliveryFee = (o.total||0) < 250 ? 50 : 0;
+                const totalWithDelivery = (o.total||0) + deliveryFee;
+                return `<div class="search-result"><div><b>${o.client_name}</b> — ${new Date(o.created_at).toLocaleString('ru')}<br>${o.client_address||''}<br>Сумма: ${o.total} руб + Доставка: ${deliveryFee} руб = <b>${totalWithDelivery} руб</b><br><span class="status-badge status-${o.status}">${o.status}</span></div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                    ${o.status==='new' ? `<button class="btn btn-small btn-green" onclick="acceptOrder(${o.id})">Принять</button><button class="btn btn-small btn-danger" onclick="rejectOrder(${o.id})">Отклонить</button>` : ''}
+                    ${o.status!=='cancelled' && o.status!=='done' ? `<button class="btn btn-small" onclick="sendReceipt(${o.id})">Чек</button>` : ''}
+                </div></div>`;
+            }).join('');
     }
-
+    async function acceptOrder(id) { await sb.from('store_orders').update({ status:'delivering' }).eq('id', id); renderOrders(); }
+    async function rejectOrder(id) {
+        const reason = prompt('Причина отклонения:') || 'Отклонено';
+        await sb.from('store_orders').update({ status:'cancelled', reject_reason:reason }).eq('id', id); renderOrders();
+    }
     async function sendReceipt(id) {
         const { data } = await sb.from('store_orders').select('*').eq('id', id).single();
         if (!data) return;
-        const { data: client } = await sb.from('store_clients').select('email').eq('phone', data.client_phone).single();
-        const email = client?.email || prompt('Почта клиента:');
-        if (!email) return;
-        const body = 'Чек по заказу от ' + new Date(data.created_at).toLocaleString('ru') + '\n\nСпасибо за покупку!';
-        window.location.href = 'mailto:' + email + '?subject=Чек&body=' + encodeURIComponent(body);
-        await sb.from('store_orders').update({ receipt_sent: true }).eq('id', id);
-        renderOrders();
+        const deliveryFee = (data.total||0) < 250 ? 50 : 0;
+        window.location.href = 'mailto:'+(data.client_email||'')+'?subject=Чек&body='+encodeURIComponent('Чек по заказу от '+new Date(data.created_at).toLocaleString('ru')+'\nСумма: '+data.total+' руб\nДоставка: '+deliveryFee+' руб\nИтого: '+(data.total+deliveryFee)+' руб\n\nСпасибо!');
     }
 
-    // ======== СОТРУДНИКИ ========
+    // ДОСТАВКА
+    async function renderDelivery() {
+        const { data } = await sb.from('store_orders').select('*').in('status',['new','delivering']).order('created_at',{ascending:false});
+        document.getElementById('deliveryList').innerHTML = !data||data.length===0 ? '<p>Нет заказов для доставки</p>' :
+            data.map(o => {
+                const deliveryFee = (o.total||0) < 250 ? 50 : 0;
+                return `<div class="search-result"><div><b>${o.client_name}</b><br>${o.client_address||''}<br>${o.total} руб + ${deliveryFee} руб доставка<br><span class="status-badge status-${o.status}">${o.status}</span></div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                    ${o.status==='new' ? `<button class="btn btn-small" onclick="updateOrderStatus(${o.id},'delivering')">В доставку</button>` : ''}
+                    ${o.status==='delivering' ? `<button class="btn btn-small btn-green" onclick="updateOrderStatus(${o.id},'done')">Доставлен</button>` : ''}
+                </div></div>`;
+            }).join('');
+    }
+    async function updateOrderStatus(id, status) { await sb.from('store_orders').update({ status }).eq('id', id); renderDelivery(); }
+
+    // СОТРУДНИКИ
     async function renderStaff() {
-        if (!currentStaff || currentStaff.access !== 'full') return;
+        if (!currentStaff || currentStaff.role !== 'admin') return;
         const { data } = await sb.from('store_staff').select('*');
-        document.getElementById('staffList').innerHTML = data?.map(s => `
-            <div class="search-result">
-                <div><b>${s.name}</b> (${s.access === 'full' ? 'Полный' : 'Ограниченный'})</div>
-                <button class="btn-danger" onclick="deleteStaff(${s.id})" style="padding:4px 8px;">Удалить</button>
-            </div>
-        `).join('') || '<p>Нет сотрудников</p>';
+        document.getElementById('staffList').innerHTML = data?.map(s => {
+            const perms = s.permissions || {};
+            return `
+            <div class="search-result" style="flex-direction:column; align-items:flex-start;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <b>${s.name}</b>
+                    <div style="display:flex; gap:4px;">
+                        <select onchange="updateStaffRole(${s.id}, this.value)" style="width:auto; padding:4px;">
+                            <option value="admin" ${s.role==='admin'?'selected':''}>Админ</option>
+                            <option value="seller" ${s.role==='seller'?'selected':''}>Продавец</option>
+                            <option value="delivery" ${s.role==='delivery'?'selected':''}>Доставщик</option>
+                        </select>
+                        <button class="btn-danger" onclick="deleteStaff(${s.id})" style="padding:4px 8px;">Уд</button>
+                    </div>
+                </div>
+                ${s.role !== 'admin' ? `
+                <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+                    <label class="perm-label"><input type="checkbox" ${perms.clients?'checked':''} onchange="togglePerm(${s.id},'clients',this.checked)"> Клиенты</label>
+                    <label class="perm-label"><input type="checkbox" ${perms.products?'checked':''} onchange="togglePerm(${s.id},'products',this.checked)"> Товары</label>
+                    <label class="perm-label"><input type="checkbox" ${perms.orders?'checked':''} onchange="togglePerm(${s.id},'orders',this.checked)"> Заказы</label>
+                    <label class="perm-label"><input type="checkbox" ${perms.delivery?'checked':''} onchange="togglePerm(${s.id},'delivery',this.checked)"> Доставка</label>
+                    <label class="perm-label"><input type="checkbox" ${perms.messages?'checked':''} onchange="togglePerm(${s.id},'messages',this.checked)"> Сообщения</label>
+                </div>` : ''}
+            </div>`;
+        }).join('') || '<p>Нет сотрудников</p>';
     }
 
     async function addStaff() {
-        if (!currentStaff || currentStaff.access !== 'full') return;
-        const name = prompt('Имя:');
-        if (!name) return;
-        const login = prompt('5-значный код:');
-        if (!login || login.length !== 5) return;
-        const password = prompt('Пароль:');
-        if (!password) return;
-        const access = confirm('Полный доступ?') ? 'full' : 'limited';
-        await sb.from('store_staff').insert({ name, login, password, access });
+        if (!currentStaff||currentStaff.role!=='admin') return;
+        const name = prompt('Имя:'); if (!name) return;
+        const login = prompt('5-значный код:'); if (!login||login.length!==5) return;
+        const password = prompt('Пароль:'); if (!password) return;
+        const role = prompt('Роль (admin/seller/delivery):','seller');
+        await sb.from('store_staff').insert({ name, login, password, role, permissions:{} }); renderStaff();
+    }
+
+    async function updateStaffRole(id, role) {
+        await sb.from('store_staff').update({ role }).eq('id', id);
         renderStaff();
     }
 
-    async function deleteStaff(id) {
-        await sb.from('store_staff').delete().eq('id', id);
-        renderStaff();
-    }
+    window.togglePerm = async function(id, perm, value) {
+        const { data } = await sb.from('store_staff').select('permissions').eq('id', id).single();
+        const perms = data?.permissions || {};
+        perms[perm] = value;
+        await sb.from('store_staff').update({ permissions: perms }).eq('id', id);
+    };
 
-    // ======== СООБЩЕНИЯ ========
+    async function deleteStaff(id) { await sb.from('store_staff').delete().eq('id', id); renderStaff(); }
+
+    // СООБЩЕНИЯ
     async function renderMessages() {
-        const { data } = await sb.from('store_messages').select('*').order('created_at', { ascending: false });
-        document.getElementById('messagesList').innerHTML = !data || data.length === 0 ? '<p>Нет сообщений</p>' :
-            data.map(m => `
-                <div class="search-result">
-                    <div><b>${m.from_name}</b><br>${m.text}<br><small>${new Date(m.created_at).toLocaleString('ru')}</small></div>
-                    <button class="btn-danger" onclick="deleteMsg(${m.id})" style="padding:4px 8px;">Удалить</button>
-                </div>
-            `).join('');
+        const { data } = await sb.from('store_messages').select('*').order('created_at',{ascending:false});
+        document.getElementById('messagesList').innerHTML = !data||data.length===0 ? '<p>Нет сообщений</p>' : data.map(m => `<div class="search-result"><div><b>${m.from_name}</b><br>${m.text}</div></div>`).join('');
         document.getElementById('msgBadge').innerText = data?.length || 0;
     }
-
-    async function deleteMsg(id) {
-        await sb.from('store_messages').delete().eq('id', id);
-        renderMessages();
-    }
-
     renderMessages();
 </script>
 </body>
