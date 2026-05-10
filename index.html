@@ -45,62 +45,71 @@
         .search-result { padding:8px 12px; background:#f9f9f9; border-radius:8px; cursor:pointer; margin-bottom:4px; }
         .search-result:hover { background:#e8f0ff; }
         .msg-badge { background:#ff3b30; color:#fff; border-radius:10px; padding:2px 7px; font-size:0.7rem; margin-left:6px; }
+        .login-screen { display:flex; align-items:center; justify-content:center; min-height:80vh; }
+        .login-card { background:#fff; border-radius:24px; padding:30px; width:100%; max-width:350px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+        body.dark .login-card { background:#1f2c38; }
+        .login-card input { width:100%; padding:12px; margin-bottom:12px; border:1px solid #ddd; border-radius:12px; }
+        body.dark .login-card input { background:#0e1621; border-color:#2b3b4c; color:#fff; }
     </style>
 </head>
 <body>
-<button class="btn-theme" onclick="toggleTheme()">Тема</button>
+<button class="btn-theme hidden" id="themeBtn" onclick="toggleTheme()">Тема</button>
 
-<div class="container">
-    <h1>Панель управления</h1>
-    
-    <div class="tabs">
-        <div class="tab active" onclick="switchPanel('clients')">Клиенты</div>
-        <div class="tab" onclick="switchPanel('products')">Товары</div>
-        <div class="tab" onclick="switchPanel('orders')">Заказы</div>
-        <div class="tab" onclick="switchPanel('staff')">Сотрудники</div>
-        <div class="tab" onclick="switchPanel('messages')">Сообщения <span class="msg-badge" id="msgBadge">0</span></div>
-    </div>
-
-    <!-- ПАНЕЛЬ КЛИЕНТОВ -->
-    <div id="panelClients" class="card">
-        <h2>Поиск клиента</h2>
-        <div class="field">
-            <label>Номер телефона (или последние 4 цифры)</label>
-            <input type="text" id="clientPhone" placeholder="+7 (900) 123-45-67 или 4567">
+<div class="container" id="mainContainer">
+    <!-- ЭКРАН ВХОДА -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-card">
+            <h1>Панель управления</h1>
+            <p style="color:#888; margin-bottom:20px;">Введите данные для входа</p>
+            <input type="text" id="loginCode" placeholder="5-значный код">
+            <input type="password" id="loginPassword" placeholder="Пароль">
+            <button class="btn" onclick="adminLogin()">Войти</button>
         </div>
-        <button class="btn" onclick="searchClient()">Найти</button>
-        <div id="clientResult"></div>
     </div>
 
-    <!-- ПАНЕЛЬ ТОВАРОВ -->
-    <div id="panelProducts" class="card hidden">
-        <h2>Товары</h2>
-        <div class="field">
-            <label>Поиск по номеру или названию</label>
-            <input type="text" id="productSearch" placeholder="Например: 101 или блокнот">
+    <!-- ИНТЕРФЕЙС (скрыт до входа) -->
+    <div id="adminInterface" class="hidden">
+        <h1>Панель управления</h1>
+        <div id="staffInfo" style="font-size:0.8rem; color:#8e9eae; margin-bottom:12px;"></div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchPanel('clients')">Клиенты</div>
+            <div class="tab" onclick="switchPanel('products')">Товары</div>
+            <div class="tab" onclick="switchPanel('orders')">Заказы</div>
+            <div class="tab" onclick="switchPanel('staff')">Сотрудники</div>
+            <div class="tab" onclick="switchPanel('messages')">Сообщения <span class="msg-badge" id="msgBadge">0</span></div>
         </div>
-        <button class="btn" onclick="searchProduct()">Найти товар</button>
-        <div id="productResult"></div>
-        <button class="btn-outline" onclick="addProduct()" style="margin-top:12px;">Добавить товар</button>
-    </div>
 
-    <!-- ПАНЕЛЬ ЗАКАЗОВ -->
-    <div id="panelOrders" class="card hidden">
-        <h2>Заказы</h2>
-        <div id="ordersList"></div>
-    </div>
+        <div id="panelClients" class="card">
+            <h2>Поиск клиента</h2>
+            <div class="field"><label>Номер телефона (или последние 4 цифры)</label><input type="text" id="clientPhone" placeholder="+7 (900) 123-45-67 или 4567"></div>
+            <button class="btn" onclick="searchClient()">Найти</button>
+            <div id="clientResult"></div>
+        </div>
 
-    <!-- ПАНЕЛЬ СОТРУДНИКОВ -->
-    <div id="panelStaff" class="card hidden">
-        <h2>Сотрудники</h2>
-        <div id="staffList"></div>
-        <button class="btn-outline" onclick="addStaff()" style="margin-top:12px;">Добавить сотрудника</button>
-    </div>
+        <div id="panelProducts" class="card hidden">
+            <h2>Товары</h2>
+            <div class="field"><label>Поиск по номеру или названию</label><input type="text" id="productSearch" placeholder="Например: 101 или блокнот"></div>
+            <button class="btn" onclick="searchProduct()">Найти товар</button>
+            <div id="productResult"></div>
+            <button class="btn-outline" onclick="addProduct()" style="margin-top:12px;">Добавить товар</button>
+        </div>
 
-    <!-- ПАНЕЛЬ СООБЩЕНИЙ -->
-    <div id="panelMessages" class="card hidden">
-        <h2>Сообщения</h2>
-        <div id="messagesList"></div>
+        <div id="panelOrders" class="card hidden">
+            <h2>Заказы</h2>
+            <div id="ordersList"></div>
+        </div>
+
+        <div id="panelStaff" class="card hidden">
+            <h2>Сотрудники</h2>
+            <div id="staffList"></div>
+            <button class="btn-outline" onclick="addStaff()" style="margin-top:12px;">Добавить сотрудника</button>
+        </div>
+
+        <div id="panelMessages" class="card hidden">
+            <h2>Сообщения</h2>
+            <div id="messagesList"></div>
+        </div>
     </div>
 </div><script>
     const SUPABASE_URL = "https://iiuahjmpszfcgtwapidt.supabase.co";
@@ -108,28 +117,41 @@
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let currentTheme = localStorage.getItem('store_admin_theme') || 'light';
+    let currentStaff = null;
 
-    function applyTheme() {
-        document.body.classList.toggle('dark', currentTheme === 'dark');
-    }
-
-    function toggleTheme() {
-        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('store_admin_theme', currentTheme);
-        applyTheme();
-    }
+    function applyTheme() { document.body.classList.toggle('dark', currentTheme === 'dark'); }
+    function toggleTheme() { currentTheme = currentTheme === 'light' ? 'dark' : 'light'; localStorage.setItem('store_admin_theme', currentTheme); applyTheme(); }
     applyTheme();
+
+    // ======== ВХОД ========
+    function adminLogin() {
+        const login = document.getElementById('loginCode').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        const staff = JSON.parse(localStorage.getItem('store_staff') || '[]');
+        const found = staff.find(s => s.login === login && s.password === password);
+        if (found) {
+            currentStaff = found;
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('adminInterface').classList.remove('hidden');
+            document.getElementById('themeBtn').classList.remove('hidden');
+            document.getElementById('staffInfo').innerText = 'Вы вошли как: ' + found.name + ' (' + (found.access === 'full' ? 'Полный доступ' : 'Ограниченный') + ')';
+            if (found.access !== 'full') {
+                document.getElementById('panelStaff').classList.add('hidden');
+            }
+            renderStaff();
+            renderMessages();
+        } else {
+            alert('Неверный код или пароль');
+        }
+    }
 
     function switchPanel(panel) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelector(`.tab[onclick*="${panel}"]`).classList.add('active');
-        ['Clients','Products','Orders','Staff','Messages'].forEach(p => {
-            document.getElementById('panel' + p).classList.add('hidden');
-        });
+        ['Clients','Products','Orders','Staff','Messages'].forEach(p => document.getElementById('panel' + p).classList.add('hidden'));
         document.getElementById('panel' + panel.charAt(0).toUpperCase() + panel.slice(1)).classList.remove('hidden');
         if (panel === 'orders') renderOrders();
         if (panel === 'messages') renderMessages();
-        if (panel === 'staff') renderStaff();
     }
 
     // ======== КЛИЕНТЫ ========
@@ -141,189 +163,90 @@
     function searchClient() {
         const phone = document.getElementById('clientPhone').value.trim().replace(/\D/g, '');
         if (!phone) return alert('Введите номер телефона');
-        
         let found = clients.find(c => c.phone.replace(/\D/g, '') === phone);
-        if (!found && phone.length >= 4) {
-            found = clients.find(c => c.phone.replace(/\D/g, '').endsWith(phone));
-        }
-        
+        if (!found && phone.length >= 4) found = clients.find(c => c.phone.replace(/\D/g, '').endsWith(phone));
         const container = document.getElementById('clientResult');
-        if (!found) {
-            container.innerHTML = '<p>Клиент не найден. <button class="btn-outline" onclick="registerNewClient()">Создать нового</button></p>';
-            return;
-        }
-        
+        if (!found) { container.innerHTML = '<p>Клиент не найден.</p>'; return; }
         container.innerHTML = `
             <div class="result">
-                <b>${found.name}</b><br>
-                Телефон: ${found.phone}<br>
-                Карта: ${found.card}<br>
+                <b>${found.name}</b><br>Телефон: ${found.phone}<br>Карта: ${found.card}<br>
                 Статус: <span class="status-badge ${found.active ? 'status-active' : 'status-inactive'}">${found.active ? 'Активирована' : 'Не активирована'}</span><br>
-                Баллы: ${found.balance}<br>
-                Почта: ${found.email || 'не указана'}
+                Баллы: ${found.balance}<br>Почта: ${found.email || 'не указана'}
             </div>
             ${!found.active ? `
-                <div class="instruction">
-                    <b>Инструкция для активации:</b><br>
-                    1. Скажите: «Уважаемый покупатель, для активации карты мы вам позвоним. Покажите, что я вам позвонил(а)».<br>
-                    2. Нажмите «Позвонить».<br>
-                    3. Если всё совпадает — «Активировать карту».
-                </div>
+                <div class="instruction"><b>Активация:</b><br>1. Скажите: «Уважаемый покупатель, мы вам позвоним. Покажите, что я звоню».<br>2. Нажмите «Позвонить».<br>3. Если всё совпадает — «Активировать».</div>
                 <button class="btn btn-call" onclick="callClient('${found.phone}')">Позвонить</button>
-                <button class="btn btn-green" onclick="activateClientCard('${found.phone}')">Активировать карту</button>
+                <button class="btn btn-green" onclick="activateClient('${found.phone}')">Активировать карту</button>
             ` : `
+                <div class="field" style="margin-top:12px;"><label>Начислить бонусы</label><input type="number" id="bonusAmount" placeholder="Сумма"></div>
+                <button class="btn btn-green" onclick="addBonus('${found.phone}')">Начислить бонусы</button>
                 <div class="field" style="margin-top:12px;"><label>Сумма покупки</label><input type="number" id="purchaseAmount" placeholder="0"></div>
-                <div class="field"><label>Скидка (%)</label><input type="number" id="purchaseDiscount" placeholder="0" value="0" max="100"></div>
-                <button class="btn btn-green" onclick="processPurchase()">Рассчитать</button>
+                <div class="field"><label>Скидка (%)</label><input type="number" id="purchaseDiscount" value="0" max="100"></div>
+                <button class="btn" onclick="processPurchase()">Рассчитать</button>
             `}
         `;
     }
 
     function callClient(phone) { window.location.href = 'tel:' + phone.replace(/\D/g, ''); }
-    function activateClientCard(phone) {
+    function activateClient(phone) { const c = clients.find(cl => cl.phone === phone); if (c) { c.active = true; alert('Карта активирована!'); searchClient(); } }
+    function addBonus(phone) {
+        const amount = parseInt(document.getElementById('bonusAmount').value) || 0;
         const c = clients.find(cl => cl.phone === phone);
-        if (c) { c.active = true; alert('Карта для ' + c.name + ' активирована!'); searchClient(); }
+        if (c && amount > 0) { c.balance += amount; alert('Начислено ' + amount + ' баллов. Баланс: ' + c.balance); searchClient(); }
     }
-    function registerNewClient() {
-        const phone = document.getElementById('clientPhone').value.trim();
-        const name = prompt('Имя клиента:');
-        if (name && phone) {
-            clients.push({ name, phone, card:'4276 0000 ' + Math.random().toString().slice(2,6) + ' ' + Math.random().toString().slice(2,6), active:false, balance:0, email:'' });
-            alert('Клиент создан. Карта ожидает активации.');
-        }
-    }
-
-    // ======== ТОВАРЫ ========
-    const products = [
-        { id:101, name:'Блокнот', price:150, stock:20 },
-        { id:102, name:'Сквиш', price:200, stock:15 },
-        { id:103, name:'Вкусняшка', price:100, stock:50 },
-        { id:104, name:'Ручка', price:50, stock:100 }
-    ];
-
-    function searchProduct() {
-        const query = document.getElementById('productSearch').value.trim().toLowerCase();
-        const found = products.filter(p => p.id.toString() === query || p.name.toLowerCase().includes(query));
-        document.getElementById('productResult').innerHTML = found.length === 0 ? '<p>Ничего не найдено</p>' :
-            found.map(p => `<div class="search-result"><b>#${p.id}</b> - ${p.name} (${p.price} руб, осталось ${p.stock})</div>`).join('');
-    }
-
-    function addProduct() {
-        const name = prompt('Название:');
-        const price = prompt('Цена:');
-        if (name && price) {
-            products.push({ id:Math.max(...products.map(p=>p.id))+1, name, price:parseInt(price), stock:0 });
-            alert('Добавлено');
-        }
-    }
-
-    // ======== ЗАКАЗЫ ========
-    const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
-
-    function renderOrders() {
-        document.getElementById('ordersList').innerHTML = orders.length === 0 ? '<p>Нет заказов</p>' :
-            orders.map((o, i) => `
-                <div class="search-result">
-                    <b>${o.client}</b> — ${o.time}<br>
-                    ${o.items.map(it => `#${it.id} x${it.qty}`).join(', ')}<br>
-                    <small>${o.date}</small>
-                    ${!o.receiptSent ? `<button class="btn btn-small" onclick="sendReceipt(${i})">Отправить чек</button>` : '<small>Чек отправлен</small>'}
-                    ${!o.stockUpdated ? `<button class="btn btn-small btn-green" onclick="updateStock(${i})">Списать товар</button>` : '<small>Списано</small>'}
-                </div>
-            `).join('');
-    }
-
-    function sendReceipt(index) {
-        const order = orders[index];
-        const client = clients.find(c => c.phone === order.phone) || { email:'' };
-        if (!client.email) {
-            client.email = prompt('Почта клиента:');
-            if (!client.email) return;
-        }
-        const body = `Чек по заказу от ${order.date}\n\n${order.items.map(it => `#${it.id} - ${it.qty} шт`).join('\n')}\n\nСпасибо за покупку!`;
-        window.location.href = `mailto:${client.email}?subject=Чек&body=${encodeURIComponent(body)}`;
-        orders[index].receiptSent = true;
-        localStorage.setItem('store_orders', JSON.stringify(orders));
-        renderOrders();
-    }
-
-    function updateStock(index) {
-        const order = orders[index];
-        order.items.forEach(item => {
-            const product = products.find(p => p.id === item.id);
-            if (product && product.stock >= item.qty) product.stock -= item.qty;
-        });
-        orders[index].stockUpdated = true;
-        localStorage.setItem('store_orders', JSON.stringify(orders));
-        alert('Товар списан со склада');
-        renderOrders();
-    }
-
     function processPurchase() {
         const total = parseInt(document.getElementById('purchaseAmount').value) || 0;
         const discount = parseInt(document.getElementById('purchaseDiscount').value) || 0;
         const final = total * (1 - discount / 100);
-        
         const phone = document.getElementById('clientPhone').value.trim();
         const client = clients.find(c => c.phone === phone);
-        
-        orders.push({
-            client: client ? client.name : 'Неизвестный',
-            phone: phone,
-            date: new Date().toLocaleString('ru'),
-            time: prompt('На какое время заказ?') || 'не указано',
-            items: [{ id:101, qty:1 }],
-            receiptSent: false,
-            stockUpdated: false
-        });
+        const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
+        orders.push({ client: client ? client.name : 'Неизвестный', phone, date: new Date().toLocaleString('ru'), time: prompt('На какое время?') || 'не указано', items: [{ id: 101, qty: 1 }], receiptSent: false, stockUpdated: false });
         localStorage.setItem('store_orders', JSON.stringify(orders));
         alert('Итого: ' + final + ' руб');
     }
 
+    // ======== ТОВАРЫ ========
+    const products = [{ id: 101, name: 'Блокнот', price: 150, stock: 20 }, { id: 102, name: 'Сквиш', price: 200, stock: 15 }];
+    function searchProduct() {
+        const query = document.getElementById('productSearch').value.trim().toLowerCase();
+        const found = products.filter(p => p.id.toString() === query || p.name.toLowerCase().includes(query));
+        document.getElementById('productResult').innerHTML = found.length === 0 ? '<p>Ничего не найдено</p>' : found.map(p => `<div class="search-result"><b>#${p.id}</b> - ${p.name} (${p.price} руб, ${p.stock} шт)</div>`).join('');
+    }
+    function addProduct() { const name = prompt('Название:'); const price = prompt('Цена:'); if (name && price) { products.push({ id: Math.max(...products.map(p => p.id)) + 1, name, price: parseInt(price), stock: 0 }); alert('Добавлено'); } }
+
+    // ======== ЗАКАЗЫ ========
+    function renderOrders() {
+        const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
+        document.getElementById('ordersList').innerHTML = orders.length === 0 ? '<p>Нет заказов</p>' : orders.map((o, i) => `<div class="search-result"><b>${o.client}</b> — ${o.time}<br>${o.items.map(it => `#${it.id} x${it.qty}`).join(', ')}<br><small>${o.date}</small>
+            ${!o.receiptSent ? `<button class="btn btn-small" onclick="sendReceipt(${i})">Отправить чек</button>` : '<small>Чек отправлен</small>'}
+            ${!o.stockUpdated ? `<button class="btn btn-small btn-green" onclick="updateStock(${i})">Списать товар</button>` : '<small>Списано</small>'}
+        </div>`).join('');
+    }
+    function sendReceipt(i) { const orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); const o = orders[i]; const body = 'Чек по заказу от ' + o.date + '\n\n' + o.items.map(it => '#' + it.id + ' - ' + it.qty + ' шт').join('\n') + '\n\nСпасибо!'; window.location.href = 'mailto:?subject=Чек&body=' + encodeURIComponent(body); orders[i].receiptSent = true; localStorage.setItem('store_orders', JSON.stringify(orders)); renderOrders(); }
+    function updateStock(i) { const orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); orders[i].stockUpdated = true; localStorage.setItem('store_orders', JSON.stringify(orders)); alert('Товар списан'); renderOrders(); }
+
     // ======== СОТРУДНИКИ ========
-    const staff = JSON.parse(localStorage.getItem('store_staff') || '[]');
-
     function renderStaff() {
-        document.getElementById('staffList').innerHTML = staff.map((s, i) => `
-            <div style="padding:10px; background:#f9f9f9; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between;" class="search-result">
-                <div><b>${s.name}</b> (${s.access === 'full' ? 'Полный' : 'Ограниченный'})</div>
-                <button class="btn-danger" onclick="deleteStaff(${i})" style="width:auto; padding:6px 12px;">Удалить</button>
-            </div>
-        `).join('') || '<p>Нет сотрудников</p>';
+        if (!currentStaff || currentStaff.access !== 'full') return;
+        const staff = JSON.parse(localStorage.getItem('store_staff') || '[]');
+        document.getElementById('staffList').innerHTML = staff.map((s, i) => `<div class="search-result" style="display:flex;justify-content:space-between;"><div><b>${s.name}</b> (${s.access === 'full' ? 'Полный' : 'Ограниченный'})</div><button class="btn-danger" onclick="deleteStaff(${i})" style="width:auto;padding:6px 12px;">Удалить</button></div>`).join('') || '<p>Нет сотрудников</p>';
     }
-
-    function addStaff() {
-        const name = prompt('Имя:');
-        const login = prompt('5-значный код:');
-        const password = prompt('Пароль:');
-        const access = confirm('Полный доступ?') ? 'full' : 'limited';
-        if (name && login && login.length === 5) {
-            staff.push({ name, login, password, access });
-            localStorage.setItem('store_staff', JSON.stringify(staff));
-            renderStaff();
-        }
-    }
-
-    function deleteStaff(index) { staff.splice(index, 1); localStorage.setItem('store_staff', JSON.stringify(staff)); renderStaff(); }
+    function addStaff() { if (!currentStaff || currentStaff.access !== 'full') return; const name = prompt('Имя:'); const login = prompt('5-значный код:'); const password = prompt('Пароль:'); const access = confirm('Полный доступ?') ? 'full' : 'limited'; if (name && login && login.length === 5) { const staff = JSON.parse(localStorage.getItem('store_staff') || '[]'); staff.push({ name, login, password, access }); localStorage.setItem('store_staff', JSON.stringify(staff)); renderStaff(); } }
+    function deleteStaff(i) { const staff = JSON.parse(localStorage.getItem('store_staff') || '[]'); staff.splice(i, 1); localStorage.setItem('store_staff', JSON.stringify(staff)); renderStaff(); }
 
     // ======== СООБЩЕНИЯ ========
-    const messages = JSON.parse(localStorage.getItem('store_messages') || '[]');
-
     function renderMessages() {
-        document.getElementById('messagesList').innerHTML = messages.length === 0 ? '<p>Нет сообщений</p>' :
-            messages.map((m, i) => `
-                <div class="search-result">
-                    <b>${m.from}</b><br>${m.text}<br><small>${m.date}</small>
-                    <button class="btn-small btn-danger" onclick="deleteMsg(${i})">Удалить</button>
-                </div>
-            `).join('');
+        const messages = JSON.parse(localStorage.getItem('store_messages') || '[]');
+        document.getElementById('messagesList').innerHTML = messages.length === 0 ? '<p>Нет сообщений</p>' : messages.map((m, i) => `<div class="search-result"><b>${m.from}</b><br>${m.text}<br><small>${m.date}</small><button class="btn-danger" onclick="deleteMsg(${i})" style="width:auto;padding:4px 8px;">Удалить</button></div>`).join('');
         document.getElementById('msgBadge').innerText = messages.length;
     }
+    function deleteMsg(i) { const messages = JSON.parse(localStorage.getItem('store_messages') || '[]'); messages.splice(i, 1); localStorage.setItem('store_messages', JSON.stringify(messages)); renderMessages(); }
 
-    function deleteMsg(index) { messages.splice(index, 1); localStorage.setItem('store_messages', JSON.stringify(messages)); renderMessages(); }
-
-    renderStaff();
-    renderMessages();
+    // Инициализация
+    if (!localStorage.getItem('store_staff')) {
+        localStorage.setItem('store_staff', JSON.stringify([{ name:'Максим', login:'12345', password:'admin123', access:'full' }]));
+    }
 </script>
 </body>
 </html>
