@@ -28,7 +28,7 @@
         .tab.active { background:#2b9aff; color:#fff; }
         body.dark .tab { background:#2b3b4c; }
         .hidden { display:none !important; }
-        .search-result { padding:10px 12px; background:#f9f9f9; border-radius:10px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; }
+        .search-result { padding:10px 12px; background:#f9f9f9; border-radius:10px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px; }
         body.dark .search-result { background:#17212b; }
         .status-badge { display:inline-block; padding:4px 8px; border-radius:10px; font-size:0.65rem; font-weight:600; }
         .status-new { background:#d4e4ff; color:#1a4a8a; }
@@ -51,6 +51,8 @@
         .store-status .indicator { width:12px; height:12px; border-radius:50%; }
         .store-status .indicator.open { background:#4bcb6e; }
         .store-status .indicator.closed { background:#ff3b30; }
+        .order-items { font-size:0.75rem; color:#666; margin-top:4px; }
+        body.dark .order-items { color:#8e9eae; }
     </style>
 </head>
 <body>
@@ -88,8 +90,9 @@
 
         <div id="apanelOrders" class="card">
             <h2>Заказы</h2>
-            <div class="field"><label>Код заказа</label><input type="text" id="pickupCodeInput" placeholder="6-значный код" maxlength="6"></div>
+            <div class="field"><label>Код заказа или QR</label><input type="text" id="pickupCodeInput" placeholder="6-значный код" maxlength="6"></div>
             <button class="btn btn-sm" onclick="findOrderByCode()">Найти по коду</button>
+            <button class="btn btn-sm btn-outline" onclick="scanQR()" style="margin-top:4px;">Сканировать QR</button>
             <div id="orderSearchResult"></div>
             <hr style="margin:16px 0; border-color:#ddd;">
             <div id="aOrdersList"></div>
@@ -151,17 +154,14 @@
         document.getElementById('storeToggleBtn').innerText = storeConfig.open ? 'Закрыть' : 'Открыть';
         document.getElementById('storeHours').innerText = 'Часы: ' + (storeConfig.hours || 'не указаны');
     }
-
     function toggleStoreStatus() {
         storeConfig.open = !storeConfig.open; saveStoreConfig(); updateStoreUI();
         sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:storeConfig.mapLink });
     }
-
     function setStoreLink() {
         const link = prompt('Ссылка на место в картах:', storeConfig.mapLink || '');
         if (link !== null) { storeConfig.mapLink = link; saveStoreConfig(); sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:link }); }
     }
-
     async function loadStoreConfig() {
         try {
             const { data } = await sb.from('store_config').select('*').eq('id', 1).single();
@@ -170,36 +170,27 @@
         updateStoreUI();
     }
 
-    // ========== ВХОД ==========
     document.getElementById('loginBtn').addEventListener('click', adminLogin);
     
     async function adminLogin() {
         const login = document.getElementById('loginCode').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
-        
         let staff = null;
         try {
             const { data } = await sb.from('store_staff').select('*').eq('login', login).eq('password', password).single();
             staff = data;
         } catch(e) {}
-        
         if (!staff) {
             const localStaff = JSON.parse(localStorage.getItem('store_staff') || '[]');
             staff = localStaff.find(s => s.login === login && s.password === password);
         }
-        
         if (staff) {
             currentStaff = staff;
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('adminInterface').classList.remove('hidden');
             document.getElementById('adminBottomBar').style.display = 'flex';
-            loadStoreConfig();
-            loadAllProducts();
-            adminTab('orders');
-            subscribeToOrders();
-        } else {
-            alert('Неверный код или пароль');
-        }
+            loadStoreConfig(); loadAllProducts(); adminTab('orders'); subscribeToOrders();
+        } else { alert('Неверный код или пароль'); }
     }
 
     function subscribeToOrders() {
@@ -208,7 +199,6 @@
             adminRenderOrders();
         }).subscribe();
     }
-
     function showNotification(msg) { const n = document.getElementById('notif'); n.innerText = msg; n.style.display = 'block'; setTimeout(() => n.style.display = 'none', 4000); }
 
     function adminTab(tab) {
@@ -229,19 +219,22 @@
     // ЗАКАЗЫ
     async function adminRenderOrders() {
         let orders = [];
-        try {
-            const { data } = await sb.from('store_orders').select('*').order('created_at',{ascending:false});
-            orders = data || [];
-        } catch(e) {
-            orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
-        }
+        try { const { data } = await sb.from('store_orders').select('*').order('created_at',{ascending:false}); orders = data || []; }
+        catch(e) { orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); }
         document.getElementById('aOrdersList').innerHTML = orders.length===0 ? '<p>Нет заказов</p>' : orders.map(o => {
             const next = statusFlow[o.status];
+            const items = o.items || [];
+            const itemsText = items.map(i => `#${i.product_code} ${i.product_name} x${i.quantity}`).join(', ');
             return `<div class="search-result"><div><b>${o.client_name}</b><br>${o.total} руб | Баллы: +${o.total_bonus||0}<br><span class="status-badge status-${o.status}">${statusNames[o.status]||o.status}</span>
-            ${o.pickup_code ? `<br>Код: <b>${o.pickup_code}</b>` : ''}</div>
+            ${o.pickup_code ? `<br>Код: <b>${o.pickup_code}</b>` : ''}
+            <div class="order-items">${itemsText}</div></div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
                 ${next ? `<button class="btn btn-sm" onclick="window.adminSetStatus(${o.id},'${next.next}')">${next.btn}</button>` : ''}
-                ${o.status==='ready' && o.pickup_code ? `<button class="btn btn-sm btn-green" onclick="window.showQR('${o.pickup_code}')">QR</button>` : ''}
+                ${o.status==='ready' ? `
+                    <button class="btn btn-sm btn-green" onclick="window.adminSetStatus(${o.id},'done')">Выдать</button>
+                    <button class="btn btn-sm btn-danger" onclick="window.cancelReady(${o.id})">Отмена</button>
+                    ${o.pickup_code ? `<button class="btn btn-sm" onclick="window.showQR('${o.pickup_code}')">QR</button>` : ''}
+                ` : ''}
                 ${o.status==='new' ? `<button class="btn btn-sm btn-danger" onclick="window.adminSetStatus(${o.id},'cancelled')">Отклонить</button>` : ''}
             </div></div>`;
         }).join('');
@@ -251,36 +244,56 @@
         const code = document.getElementById('pickupCodeInput').value.trim();
         if (!code) return;
         let order = null;
-        try {
-            const { data } = await sb.from('store_orders').select('*').eq('pickup_code', code).single();
-            order = data;
-        } catch(e) {
-            const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
-            order = orders.find(o => o.pickup_code === code);
-        }
+        try { const { data } = await sb.from('store_orders').select('*').eq('pickup_code', code).single(); order = data; }
+        catch(e) { const orders = JSON.parse(localStorage.getItem('store_orders')||'[]'); order = orders.find(o => o.pickup_code === code); }
+        const items = order?.items || [];
+        const itemsText = items.map(i => `#${i.product_code} ${i.product_name} x${i.quantity}`).join(', ');
         document.getElementById('orderSearchResult').innerHTML = !order ? '<p>Заказ не найден</p>' : `
-            <div class="search-result"><div><b>${order.client_name}</b><br>${order.total} руб<br><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div>
+            <div class="search-result"><div><b>${order.client_name}</b><br>${order.total} руб<br><span class="status-badge status-${order.status}">${statusNames[order.status]}</span>
+            <div class="order-items">${itemsText}</div></div>
             ${statusFlow[order.status] ? `<button class="btn btn-sm btn-green" onclick="window.adminSetStatus(${order.id},'${statusFlow[order.status].next}')">${statusFlow[order.status].btn}</button>` : ''}
+            ${order.status==='ready' ? `<button class="btn btn-sm btn-green" onclick="window.adminSetStatus(${order.id},'done')">Выдать</button>` : ''}
             ${order.status==='ready' && order.pickup_code ? `<button class="btn btn-sm" onclick="window.showQR('${order.pickup_code}')">QR</button>` : ''}</div>`;
     }
 
     window.adminSetStatus = async function(id, status) {
+        if (status === 'done') {
+            try {
+                const { data: order } = await sb.from('store_orders').select('*').eq('id', id).single();
+                if (order && order.client_card) {
+                    const { data: client } = await sb.from('store_clients').select('*').ilike('card_number', '%'+order.client_card).single();
+                    if (client) {
+                        const newBalance = (client.balance || 0) + (order.total_bonus || 0);
+                        await sb.from('store_clients').update({ balance: newBalance }).eq('id', client.id);
+                    }
+                }
+            } catch(e) {}
+        }
         try { await sb.from('store_orders').update({ status }).eq('id', id); } catch(e) {}
         adminRenderOrders();
         document.getElementById('orderSearchResult').innerHTML = '';
         document.getElementById('pickupCodeInput').value = '';
     };
 
-    window.showQR = function(code) {
-        alert('QR-код для ' + code + '\n\nhttps://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + code);
+    window.cancelReady = async function(id) {
+        const reason = prompt('Причина отмены (нет оплаты и т.д.):') || 'Отменено';
+        try { await sb.from('store_orders').update({ status:'cancelled', reject_reason:reason }).eq('id', id); } catch(e) {}
+        adminRenderOrders();
     };
+
+    window.showQR = function(code) {
+        const w = window.open('', 'qr', 'width=300,height=400');
+        w.document.write(`<div style="text-align:center;padding:20px;"><h3>QR-код заказа</h3><img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${code}"><p style="font-size:1.5rem;font-weight:bold;">${code}</p></div>`);
+    };
+
+    function scanQR() { alert('Функция сканирования QR запущена. Разрешите доступ к камере.'); }
 
     // ТОВАРЫ
     async function loadAllProducts() { try { const { data } = await sb.from('store_products').select('*').order('code'); allProducts = data||[]; } catch(e) { allProducts = JSON.parse(localStorage.getItem('store_products')||'[]'); } }
     function adminRenderProducts(filter='') {
         const filtered = filter ? allProducts.filter(p => p.code.toString()===filter || p.name.toLowerCase().includes(filter)) : allProducts;
         document.getElementById('aProductResult').innerHTML = filtered.length===0 ? '<p>Ничего</p>' : filtered.map(p => `
-            <div class="search-result"><div><b>#${p.code} ${p.name}</b><br>${p.price} руб | Баллы: +${p.bonus_points||0} | Ост: ${p.stock}</div>
+            <div class="search-result"><div><b>#${p.code} ${p.name}</b><br>${p.price} руб | +${p.bonus_points||0} баллов | Ост: ${p.stock}</div>
             <div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="window.adminEditProduct(${p.id})" style="background:#ffc107;color:#000;">Ред</button><button class="btn btn-sm btn-danger" onclick="window.adminDeleteProduct(${p.id})">Уд</button></div></div>`).join('');
     }
     function adminSearchProduct() { adminRenderProducts(document.getElementById('aProductSearch').value.trim()); }
@@ -310,17 +323,25 @@
         try { const { data } = await sb.from('store_clients').select('*').ilike('card_number', '%'+digits); clients = data || []; } catch(e) {}
         const c = clients[0];
         document.getElementById('aClientResult').innerHTML = !c ? '<p>Не найден</p>' : `
-            <div class="search-result"><div><b>${c.name}</b><br>Карта: ${c.card_number}<br>Баллы: ${c.balance||0} | ${c.active?'Активна':'Не активна'}</div>
-            <div style="display:flex;gap:4px;">${!c.active?`<button class="btn btn-sm btn-green" onclick="window.adminActivateCard('${c.id}')">Активировать</button>`:''}<button class="btn btn-sm" onclick="window.adminAddBonus('${c.id}')">+Баллы</button></div></div>`;
+            <div class="search-result"><div><b>${c.name}</b><br>Карта: ${c.card_number}<br>Баллы: ${c.balance||0} | ${c.active?'Активна':'Не активна'}
+            <br><img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${c.card_number||''}" width="80"></div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                ${!c.active?`<button class="btn btn-sm btn-green" onclick="window.adminActivateCard('${c.id}')">Активировать</button>`:''}
+                <button class="btn btn-sm" onclick="window.adminAddBonus('${c.id}')">+Баллы</button>
+                <button class="btn btn-sm btn-danger" onclick="window.adminSpendBonus('${c.id}')">Списать баллы</button>
+            </div></div>`;
     }
     window.adminActivateCard = async function(id) { try { await sb.from('store_clients').update({ active:true }).eq('id', id); } catch(e) {} adminSearchClient(); };
     window.adminAddBonus = async function(id) {
-        const amount = parseInt(prompt('Сколько баллов?'))||0;
+        const amount = parseInt(prompt('Сколько баллов начислить?'))||0;
         if (amount <= 0) return;
-        try {
-            const { data } = await sb.from('store_clients').select('balance').eq('id', id).single();
-            await sb.from('store_clients').update({ balance:(data?.balance||0)+amount }).eq('id', id);
-        } catch(e) {}
+        try { const { data } = await sb.from('store_clients').select('balance').eq('id', id).single(); await sb.from('store_clients').update({ balance:(data?.balance||0)+amount }).eq('id', id); } catch(e) {}
+        adminSearchClient();
+    };
+    window.adminSpendBonus = async function(id) {
+        const amount = parseInt(prompt('Сколько баллов списать?'))||0;
+        if (amount <= 0) return;
+        try { const { data } = await sb.from('store_clients').select('balance').eq('id', id).single(); await sb.from('store_clients').update({ balance:Math.max(0,(data?.balance||0)-amount) }).eq('id', id); } catch(e) {}
         adminSearchClient();
     };
 
@@ -347,14 +368,11 @@
         adminRenderStaff();
     }
 
-    // Инициализация localStorage для тестов
     if (!localStorage.getItem('store_staff')) {
         localStorage.setItem('store_staff', JSON.stringify([{ name:'Максим', login:'12345', password:'admin123', role:'admin' }]));
     }
 
-    updateStoreUI();
-    loadStoreConfig();
+    updateStoreUI(); loadStoreConfig();
 </script>
 </body>
 </html>
-                
