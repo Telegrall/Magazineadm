@@ -37,6 +37,12 @@
         .status-ready { background:#d4f5d4; color:#1a7a1a; }
         .status-done { background:#c0e0c0; color:#0a5a0a; }
         .status-cancelled { background:#ffe0e0; color:#c0392b; }
+        .staff-card { padding:10px 12px; background:#f9f9f9; border-radius:10px; margin-bottom:6px; }
+        body.dark .staff-card { background:#17212b; }
+        .staff-card .staff-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+        .staff-card .staff-name { font-weight:600; }
+        .staff-card .staff-role { font-size:0.75rem; color:#888; }
+        .staff-card .staff-actions { display:flex; gap:4px; margin-top:6px; }
         .notification { position:fixed; top:10px; right:10px; background:#4bcb6e; color:#fff; padding:12px 20px; border-radius:12px; z-index:200; display:none; font-weight:600; font-size:0.85rem; }
         .login-screen { display:flex; align-items:center; justify-content:center; min-height:80vh; }
         .login-card { background:#fff; border-radius:24px; padding:30px; width:100%; max-width:350px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
@@ -51,8 +57,7 @@
         .store-status .indicator { width:12px; height:12px; border-radius:50%; }
         .store-status .indicator.open { background:#4bcb6e; }
         .store-status .indicator.closed { background:#ff3b30; }
-        .order-items { font-size:0.75rem; color:#666; margin-top:4px; }
-        body.dark .order-items { color:#8e9eae; }
+        .slider { width:100%; margin:4px 0; }
     </style>
 </head>
 <body>
@@ -127,16 +132,14 @@
     <button class="bottom-btn" onclick="adminTab('products')">Товары</button>
     <button class="bottom-btn" onclick="adminTab('clients')">Клиенты</button>
     <button class="bottom-btn" onclick="adminTab('promos')">Скидки</button>
-</div>
-
-<script>
+                </div><script>
     const SUPABASE_URL = "https://iiuahjmpszfcgtwapidt.supabase.co";
     const SUPABASE_KEY = "sb_publishable_iFYpqkv4D0qEOj4Dn1X9Nw_OH9d5Bji";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let currentStaff = null;
     let allProducts = [];
-    let storeConfig = { open: true, hours: '09:00 - 20:00', mapLink: '' };
+    let storeConfig = { open: true, hours: '09:00 - 20:00', mapLink: '', global_bonus_percent: 100 };
 
     const statusFlow = {
         new: { next: 'collecting', label: 'Собирается', btn: 'На сборку' },
@@ -155,16 +158,16 @@
     }
     function toggleStoreStatus() {
         storeConfig.open = !storeConfig.open; saveStoreConfig(); updateStoreUI();
-        sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:storeConfig.mapLink });
+        sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:storeConfig.mapLink, global_bonus_percent:storeConfig.global_bonus_percent });
     }
     function setStoreLink() {
         const link = prompt('Ссылка на место в картах:', storeConfig.mapLink || '');
-        if (link !== null) { storeConfig.mapLink = link; saveStoreConfig(); sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:link }); }
+        if (link !== null) { storeConfig.mapLink = link; saveStoreConfig(); sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:link, global_bonus_percent:storeConfig.global_bonus_percent }); }
     }
     async function loadStoreConfig() {
         try {
             const { data } = await sb.from('store_config').select('*').eq('id', 1).single();
-            if (data) { storeConfig.open = data.open; storeConfig.hours = data.hours || '09:00 - 20:00'; storeConfig.mapLink = data.map_link || ''; }
+            if (data) { storeConfig.open = data.open; storeConfig.hours = data.hours || '09:00 - 20:00'; storeConfig.mapLink = data.map_link || ''; storeConfig.global_bonus_percent = data.global_bonus_percent || 100; }
         } catch(e) {}
         updateStoreUI();
     }
@@ -220,31 +223,39 @@
         let orders = [];
         try { const { data } = await sb.from('store_orders').select('*').order('created_at',{ascending:false}); orders = data || []; }
         catch(e) { orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); }
-        document.getElementById('aOrdersList').innerHTML = orders.length===0 ? '<p>Нет заказов</p>' : orders.map(o => {
+        
+        // Премиум-заказы первыми
+        const premiumOrders = orders.filter(o => o.premium);
+        const normalOrders = orders.filter(o => !o.premium);
+        const sorted = [...premiumOrders, ...normalOrders];
+        
+        document.getElementById('aOrdersList').innerHTML = sorted.length===0 ? '<p>Нет заказов</p>' : sorted.map(o => {
             const next = statusFlow[o.status];
-            const items = o.items || [];
-            const itemsText = items.map(i => `#${i.product_code} ${i.product_name} x${i.quantity}`).join(', ');
-            return `<div class="search-result"><div><b>${o.client_name}</b><br>${o.total} руб | Баллы: +${o.total_bonus||0} | Списано: ${o.use_bonus||0}<br><span class="status-badge status-${o.status}">${statusNames[o.status]||o.status}</span>
+            return `<div class="search-result"><div><b>${o.client_name}</b> ${o.premium ? '⭐' : ''}<br>${o.total} руб | Баллы: +${o.total_bonus||0} | Списано: ${o.use_bonus||0}<br><span class="status-badge status-${o.status}">${statusNames[o.status]||o.status}</span>
             ${o.pickup_code ? `<br>Код: <b>${o.pickup_code}</b>` : ''}
-            <button class="btn btn-sm" onclick="window.showOrderDetail(${o.id})">Подробная покупка</button></div>
+            <button class="btn btn-sm" onclick="showOrderDetail('${o.id}')">Подробнее</button></div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                ${next ? `<button class="btn btn-sm" onclick="window.adminSetStatus(${o.id},'${next.next}')">${next.btn}</button>` : ''}
+                ${next ? `<button class="btn btn-sm" onclick="adminSetStatus(${o.id},'${next.next}')">${next.btn}</button>` : ''}
                 ${o.status==='ready' ? `
-                    <button class="btn btn-sm btn-green" onclick="window.adminSetStatus(${o.id},'done')">Выдать</button>
-                    <button class="btn btn-sm btn-danger" onclick="window.cancelReady(${o.id})">Отмена</button>
+                    <button class="btn btn-sm btn-green" onclick="adminSetStatus(${o.id},'done')">Выдать</button>
+                    <button class="btn btn-sm btn-danger" onclick="cancelReady(${o.id})">Отмена</button>
                 ` : ''}
-                ${o.status==='new' ? `<button class="btn btn-sm btn-danger" onclick="window.adminSetStatus(${o.id},'cancelled')">Отклонить</button>` : ''}
+                ${o.status==='new' ? `<button class="btn btn-sm btn-danger" onclick="adminSetStatus(${o.id},'cancelled')">Отклонить</button>` : ''}
             </div></div>`;
         }).join('');
     }
 
-    window.showOrderDetail = function(id) {
-        const orders = JSON.parse(localStorage.getItem('store_orders') || '[]');
+    function showOrderDetail(id) {
+        // Загружаем из localStorage (быстрый доступ)
+        const orders = JSON.parse(localStorage.getItem('store_orders_backup') || '[]');
         const o = orders.find(o => o.id == id);
-        if (!o) return alert('Заказ не найден');
-        const items = o.items || [];
-        alert('Заказ #' + o.pickup_code + '\n' + o.client_name + '\n\n' + items.map(i => '#' + i.product_code + ' ' + i.product_name + ' x' + i.quantity + ' = ' + (i.price * i.quantity) + ' руб').join('\n') + '\n\nСумма: ' + o.total + ' руб\nБаллы: +' + (o.total_bonus||0) + '\nСписано: ' + (o.use_bonus||0) + ' баллов\nСтатус: ' + (statusNames[o.status]||o.status));
-    };
+        if (o) {
+            const items = o.items || [];
+            alert('Заказ #' + (o.pickup_code || '—') + '\n' + o.client_name + '\n\n' + items.map(i => '#' + i.product_code + ' ' + i.product_name + ' x' + i.quantity + ' = ' + (i.price * i.quantity) + ' руб').join('\n') + '\n\nСумма: ' + o.total + ' руб\nБаллы: +' + (o.total_bonus||0) + '\nСписано: ' + (o.use_bonus||0) + ' баллов\nСтатус: ' + (statusNames[o.status]||o.status));
+        } else {
+            alert('Заказ не найден в локальном кэше. Обновите страницу.');
+        }
+    }
 
     async function findOrderByCode() {
         const code = document.getElementById('pickupCodeInput').value.trim();
@@ -254,10 +265,10 @@
         catch(e) { const orders = JSON.parse(localStorage.getItem('store_orders')||'[]'); order = orders.find(o => o.pickup_code === code); }
         document.getElementById('orderSearchResult').innerHTML = !order ? '<p>Заказ не найден</p>' : `
             <div class="search-result"><div><b>${order.client_name}</b><br>${order.total} руб<br><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div>
-            ${statusFlow[order.status] ? `<button class="btn btn-sm btn-green" onclick="window.adminSetStatus(${order.id},'${statusFlow[order.status].next}')">${statusFlow[order.status].btn}</button>` : ''}</div>`;
+            ${statusFlow[order.status] ? `<button class="btn btn-sm btn-green" onclick="adminSetStatus(${order.id},'${statusFlow[order.status].next}')">${statusFlow[order.status].btn}</button>` : ''}</div>`;
     }
 
-    window.adminSetStatus = async function(id, status) {
+    async function adminSetStatus(id, status) {
         if (status === 'done') {
             try {
                 const { data: order } = await sb.from('store_orders').select('*').eq('id', id).single();
@@ -274,13 +285,13 @@
         adminRenderOrders();
         document.getElementById('orderSearchResult').innerHTML = '';
         document.getElementById('pickupCodeInput').value = '';
-    };
+    }
 
-    window.cancelReady = async function(id) {
+    async function cancelReady(id) {
         const reason = prompt('Причина отмены:') || 'Отменено';
         try { await sb.from('store_orders').update({ status:'cancelled', reject_reason:reason }).eq('id', id); } catch(e) {}
         adminRenderOrders();
-    };
+    }
 
     // ТОВАРЫ
     async function loadAllProducts() { try { const { data } = await sb.from('store_products').select('*').order('code'); allProducts = data||[]; } catch(e) { allProducts = JSON.parse(localStorage.getItem('store_products')||'[]'); } }
@@ -288,7 +299,7 @@
         const filtered = filter ? allProducts.filter(p => p.code.toString()===filter || p.name.toLowerCase().includes(filter)) : allProducts;
         document.getElementById('aProductResult').innerHTML = filtered.length===0 ? '<p>Ничего</p>' : filtered.map(p => `
             <div class="search-result"><div><b>#${p.code} ${p.name}</b><br>${p.price} руб | +${p.bonus_points||0} баллов | Ост: ${p.stock}</div>
-            <div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="window.adminEditProduct(${p.id})" style="background:#ffc107;color:#000;">Ред</button><button class="btn btn-sm btn-danger" onclick="window.adminDeleteProduct(${p.id})">Уд</button></div></div>`).join('');
+            <div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="editProduct(${p.id})" style="background:#ffc107;color:#000;">Ред</button><button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">Уд</button></div></div>`).join('');
     }
     function adminSearchProduct() { adminRenderProducts(document.getElementById('aProductSearch').value.trim()); }
     async function adminAddProduct() {
@@ -299,15 +310,15 @@
         try { await sb.from('store_products').insert({ code, name, price, bonus_points:bonus, stock }); } catch(e) {}
         loadAllProducts().then(() => adminRenderProducts());
     }
-    window.adminEditProduct = async function(id) {
+    async function editProduct(id) {
         const p = allProducts.find(pr => pr.id===id); if (!p) return;
         const name = prompt('Название:',p.name); if (name===null) return;
         const price = parseInt(prompt('Цена:',p.price)); if (isNaN(price)) return;
         const bonus = parseInt(prompt('Баллы:',p.bonus_points||0))||0; const stock = parseInt(prompt('Остаток:',p.stock))||0;
         try { await sb.from('store_products').update({ name, price, bonus_points:bonus, stock }).eq('id', id); } catch(e) {}
         loadAllProducts().then(() => adminRenderProducts());
-    };
-    window.adminDeleteProduct = async function(id) { if (!confirm('Удалить?')) return; try { await sb.from('store_products').delete().eq('id', id); } catch(e) {} loadAllProducts().then(() => adminRenderProducts()); };
+    }
+    async function deleteProduct(id) { if (!confirm('Удалить?')) return; try { await sb.from('store_products').delete().eq('id', id); } catch(e) {} loadAllProducts().then(() => adminRenderProducts()); }
 
     // КЛИЕНТЫ
     async function adminSearchClient() {
@@ -317,32 +328,42 @@
         try { const { data } = await sb.from('store_clients').select('*').ilike('card_number', '%'+digits); clients = data || []; } catch(e) {}
         const c = clients[0];
         document.getElementById('aClientResult').innerHTML = !c ? '<p>Не найден</p>' : `
-            <div class="search-result"><div><b>${c.name}</b><br>Карта: ...${c.card_number.slice(-4)}<br>Баллы: ${c.balance||0} | ${c.active?'Активна':'Не активна'} | Лимит списания: ${c.max_bonus_spend||'нет'}</div>
+            <div class="search-result"><div><b>${c.name}</b><br>Карта: ...${c.card_number.slice(-4)}<br>Баллы: ${c.balance||0} | ${c.active?'Активна':'Не активна'} | Премиум: ${c.premium?'Да':'Нет'}</div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                ${!c.active?`<button class="btn btn-sm btn-green" onclick="window.adminActivateCard('${c.id}')">Активировать</button>`:''}
-                <button class="btn btn-sm" onclick="window.adminAddBonus('${c.id}')">+Баллы</button>
-                <button class="btn btn-sm btn-danger" onclick="window.adminSpendBonus('${c.id}')">Списать</button>
-                <button class="btn btn-sm" onclick="window.adminSetMaxSpend('${c.id}')">Лимит списания</button>
+                ${!c.active?`<button class="btn btn-sm btn-green" onclick="activateCard('${c.id}')">Активировать</button>`:''}
+                <button class="btn btn-sm" onclick="addBonus('${c.id}')">+Баллы</button>
+                <button class="btn btn-sm btn-danger" onclick="spendBonus('${c.id}')">Списать</button>
+                <button class="btn btn-sm" onclick="setMaxSpend('${c.id}')">Лимит</button>
+                <button class="btn btn-sm ${c.premium ? 'btn-danger' : 'btn-green'}" onclick="togglePremium('${c.id}', ${c.premium})">${c.premium ? 'Убрать премиум' : 'Активировать премиум'}</button>
             </div></div>`;
     }
-    window.adminActivateCard = async function(id) { try { await sb.from('store_clients').update({ active:true }).eq('id', id); } catch(e) {} adminSearchClient(); };
-    window.adminAddBonus = async function(id) {
+    async function activateCard(id) { try { await sb.from('store_clients').update({ active:true }).eq('id', id); } catch(e) {} adminSearchClient(); }
+    async function addBonus(id) {
         const amount = parseInt(prompt('Сколько баллов начислить?'))||0;
         if (amount <= 0) return;
         try { const { data } = await sb.from('store_clients').select('balance').eq('id', id).single(); await sb.from('store_clients').update({ balance:(data?.balance||0)+amount }).eq('id', id); } catch(e) {}
         adminSearchClient();
-    };
-    window.adminSpendBonus = async function(id) {
+    }
+    async function spendBonus(id) {
         const amount = parseInt(prompt('Сколько баллов списать?'))||0;
         if (amount <= 0) return;
         try { const { data } = await sb.from('store_clients').select('balance').eq('id', id).single(); await sb.from('store_clients').update({ balance:Math.max(0,(data?.balance||0)-amount) }).eq('id', id); } catch(e) {}
         adminSearchClient();
-    };
-    window.adminSetMaxSpend = async function(id) {
+    }
+    async function setMaxSpend(id) {
         const amount = parseInt(prompt('Максимум баллов для списания (0 = без лимита):'))||0;
         try { await sb.from('store_clients').update({ max_bonus_spend: amount || null }).eq('id', id); } catch(e) {}
         adminSearchClient();
-    };
+    }
+    async function togglePremium(id, current) {
+        if (current) {
+            if (!confirm('Убрать премиум-статус?')) return;
+            try { await sb.from('store_clients').update({ premium: false, premium_until: null }).eq('id', id); } catch(e) {}
+        } else {
+            try { await sb.from('store_clients').update({ premium: true, premium_until: new Date(Date.now() + 30*24*60*60*1000).toISOString() }).eq('id', id); } catch(e) {}
+        }
+        adminSearchClient();
+    }
 
     // ПРОМОКОДЫ
     async function adminRenderPromos() {
@@ -350,41 +371,79 @@
         try { const { data } = await sb.from('store_promos').select('*'); promos = data || []; } catch(e) {}
         document.getElementById('aPromosList').innerHTML = promos.length===0 ? '<p>Нет</p>' : promos.map(p => {
             const productsText = (p.product_codes && p.product_codes.length > 0) ? p.product_codes.join(', ') : 'Все товары';
-            return `<div class="search-result"><div><b>${p.code}</b> — ${p.discount}%<br><small>Товары: ${productsText}</small></div>
-            <div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="window.adminEditPromo(${p.id})">Ред</button><button class="btn btn-sm btn-danger" onclick="window.adminDeletePromo(${p.id})">Уд</button></div></div>`;
+            const tags = [];
+            if (p.for_new_clients) tags.push('Новым');
+            if (p.premium_only) tags.push('Премиум');
+            const tagText = tags.length > 0 ? ' [' + tags.join(', ') + ']' : '';
+            return `<div class="search-result"><div><b>${p.code}</b> — ${p.discount}%${tagText}<br><small>Товары: ${productsText}</small></div>
+            <div style="display:flex;gap:4px;"><button class="btn btn-sm" onclick="editPromo(${p.id})">Ред</button><button class="btn btn-sm btn-danger" onclick="deletePromo(${p.id})">Уд</button></div></div>`;
         }).join('');
     }
     async function adminAddPromo() {
         const code = prompt('Код:'); if (!code) return;
         const discount = parseInt(prompt('Скидка %:')); if (isNaN(discount)) return;
+        const forNew = confirm('Только для новых клиентов?');
+        const premiumOnly = confirm('Только для премиум?');
         const productCodesStr = prompt('Коды товаров через запятую (пусто = все):') || '';
         const productCodes = productCodesStr ? productCodesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
-        try { await sb.from('store_promos').insert({ code, discount, product_codes: productCodes }); } catch(e) {}
+        try { await sb.from('store_promos').insert({ code, discount, product_codes: productCodes, for_new_clients: forNew, premium_only: premiumOnly }); } catch(e) {}
         adminRenderPromos();
     }
-    window.adminEditPromo = async function(id) {
+    async function editPromo(id) {
         const { data } = await sb.from('store_promos').select('*').eq('id', id).single();
         if (!data) return;
         const code = prompt('Код:', data.code); if (!code) return;
         const discount = parseInt(prompt('Скидка %:', data.discount)); if (isNaN(discount)) return;
+        const forNew = confirm('Только для новых клиентов?');
+        const premiumOnly = confirm('Только для премиум?');
         const productCodesStr = prompt('Коды товаров через запятую:', (data.product_codes||[]).join(', ')) || '';
         const productCodes = productCodesStr ? productCodesStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
-        try { await sb.from('store_promos').update({ code, discount, product_codes: productCodes }).eq('id', id); } catch(e) {}
+        try { await sb.from('store_promos').update({ code, discount, product_codes: productCodes, for_new_clients: forNew, premium_only: premiumOnly }).eq('id', id); } catch(e) {}
         adminRenderPromos();
-    };
-    window.adminDeletePromo = async function(id) { try { await sb.from('store_promos').delete().eq('id', id); } catch(e) {} adminRenderPromos(); };
+    }
+    async function deletePromo(id) { try { await sb.from('store_promos').delete().eq('id', id); } catch(e) {} adminRenderPromos(); }
 
     // СОТРУДНИКИ
     async function adminRenderStaff() {
         let staff = [];
         try { const { data } = await sb.from('store_staff').select('*'); staff = data || []; } catch(e) { staff = JSON.parse(localStorage.getItem('store_staff')||'[]'); }
-        document.getElementById('aStaffList').innerHTML = staff.length===0 ? '<p>Нет</p>' : staff.map(s => `<div class="search-result"><div><b>${s.name}</b> (${s.role})</div></div>`).join('');
+        document.getElementById('aStaffList').innerHTML = staff.length===0 ? '<p>Нет</p>' : staff.map(s => `
+            <div class="staff-card">
+                <div class="staff-header"><span class="staff-name">${s.name}</span><span class="staff-role">${s.role}</span></div>
+                <div class="staff-actions">
+                    <button class="btn btn-sm" onclick="editStaff(${s.id})">Ред</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteStaff(${s.id})">Удалить</button>
+                </div>
+            </div>
+        `).join('');
     }
     async function adminAddStaff() {
         const name = prompt('Имя:'); if (!name) return;
-        const login = prompt('5-значный код:'); if (!login) return;
+        const login = prompt('5-значный код:'); if (!login || login.length !== 5) return;
         const password = prompt('Пароль:'); if (!password) return;
-        try { await sb.from('store_staff').insert({ name, login, password, role:'seller' }); } catch(e) {}
+        const role = prompt('Роль (admin/seller/delivery):', 'seller');
+        try { await sb.from('store_staff').insert({ name, login, password, role }); } catch(e) {}
+        adminRenderStaff();
+    }
+    async function editStaff(id) {
+        const staffData = await getStaffById(id);
+        if (!staffData) return alert('Сотрудник не найден');
+        const name = prompt('Имя:', staffData.name); if (name === null) return;
+        const role = prompt('Роль (admin/seller/delivery):', staffData.role);
+        const changePwd = confirm('Сменить пароль?');
+        let password = staffData.password;
+        if (changePwd) {
+            password = prompt('Новый пароль:'); if (!password) return;
+        }
+        try { await sb.from('store_staff').update({ name, role, password }).eq('id', id); } catch(e) {}
+        adminRenderStaff();
+    }
+    async function getStaffById(id) {
+        try { const { data } = await sb.from('store_staff').select('*').eq('id', id).single(); return data; } catch(e) { return null; }
+    }
+    async function deleteStaff(id) {
+        if (!confirm('Удалить сотрудника?')) return;
+        try { await sb.from('store_staff').delete().eq('id', id); } catch(e) {}
         adminRenderStaff();
     }
 
@@ -395,4 +454,4 @@
     updateStoreUI(); loadStoreConfig();
 </script>
 </body>
-            </html>
+</html>
