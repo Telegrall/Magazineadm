@@ -132,7 +132,7 @@
     <button class="bottom-btn" onclick="adminTab('products')">Товары</button>
     <button class="bottom-btn" onclick="adminTab('clients')">Клиенты</button>
     <button class="bottom-btn" onclick="adminTab('promos')">Скидки</button>
-                </div><script>
+</div><script>
     const SUPABASE_URL = "https://iiuahjmpszfcgtwapidt.supabase.co";
     const SUPABASE_KEY = "sb_publishable_iFYpqkv4D0qEOj4Dn1X9Nw_OH9d5Bji";
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -156,19 +156,60 @@
         document.getElementById('storeToggleBtn').innerText = storeConfig.open ? 'Закрыть' : 'Открыть';
         document.getElementById('storeHours').innerText = 'Часы: ' + (storeConfig.hours || 'не указаны');
     }
+
     function toggleStoreStatus() {
-        storeConfig.open = !storeConfig.open; saveStoreConfig(); updateStoreUI();
-        sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:storeConfig.mapLink, global_bonus_percent:storeConfig.global_bonus_percent });
+        storeConfig.open = !storeConfig.open;
+        saveStoreConfig();
+        updateStoreUI();
+        // Сохраняем в Supabase
+        try {
+            sb.from('store_config').upsert({
+                id: 1,
+                open: storeConfig.open,
+                hours: storeConfig.hours,
+                map_link: storeConfig.mapLink,
+                global_bonus_percent: storeConfig.global_bonus_percent
+            });
+        } catch(e) {}
     }
+
     function setStoreLink() {
         const link = prompt('Ссылка на место в картах:', storeConfig.mapLink || '');
-        if (link !== null) { storeConfig.mapLink = link; saveStoreConfig(); sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:link, global_bonus_percent:storeConfig.global_bonus_percent }); }
+        if (link !== null) {
+            storeConfig.mapLink = link;
+            saveStoreConfig();
+            // Сохраняем в Supabase
+            try {
+                sb.from('store_config').upsert({
+                    id: 1,
+                    open: storeConfig.open,
+                    hours: storeConfig.hours,
+                    map_link: link,
+                    global_bonus_percent: storeConfig.global_bonus_percent
+                });
+            } catch(e) {}
+        }
     }
+
     async function loadStoreConfig() {
+        // Сначала пробуем загрузить из Supabase
         try {
             const { data } = await sb.from('store_config').select('*').eq('id', 1).single();
-            if (data) { storeConfig.open = data.open; storeConfig.hours = data.hours || '09:00 - 20:00'; storeConfig.mapLink = data.map_link || ''; storeConfig.global_bonus_percent = data.global_bonus_percent || 100; }
-        } catch(e) {}
+            if (data) {
+                storeConfig.open = data.open;
+                storeConfig.hours = data.hours || '09:00 - 20:00';
+                storeConfig.mapLink = data.map_link || '';
+                storeConfig.global_bonus_percent = data.global_bonus_percent || 100;
+            }
+        } catch(e) {
+            // Если Supabase недоступен, берём из localStorage
+            const saved = localStorage.getItem('store_config');
+            if (saved) {
+                try { storeConfig = JSON.parse(saved); } catch(e2) {}
+            }
+        }
+        // Сохраняем в localStorage для быстрого доступа
+        saveStoreConfig();
         updateStoreUI();
     }
 
@@ -246,7 +287,6 @@
     }
 
     function showOrderDetail(id) {
-        // Загружаем из localStorage (быстрый доступ)
         const orders = JSON.parse(localStorage.getItem('store_orders_backup') || '[]');
         const o = orders.find(o => o.id == id);
         if (o) {
@@ -451,7 +491,7 @@
         localStorage.setItem('store_staff', JSON.stringify([{ name:'Максим', login:'12345', password:'admin123', role:'admin' }]));
     }
 
-    updateStoreUI(); loadStoreConfig();
+    loadStoreConfig();
 </script>
 </body>
 </html>
