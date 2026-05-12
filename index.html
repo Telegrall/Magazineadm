@@ -140,6 +140,7 @@
     let currentStaff = null;
     let allProducts = [];
     let storeConfig = { open: true, hours: '09:00 - 20:00', mapLink: '', global_bonus_percent: 100 };
+    let allOrdersCache = [];
 
     const statusFlow = {
         new: { next: 'collecting', label: 'Собирается', btn: 'На сборку' },
@@ -156,61 +157,20 @@
         document.getElementById('storeToggleBtn').innerText = storeConfig.open ? 'Закрыть' : 'Открыть';
         document.getElementById('storeHours').innerText = 'Часы: ' + (storeConfig.hours || 'не указаны');
     }
-
     function toggleStoreStatus() {
-        storeConfig.open = !storeConfig.open;
-        saveStoreConfig();
-        updateStoreUI();
-        // Сохраняем в Supabase
-        try {
-            sb.from('store_config').upsert({
-                id: 1,
-                open: storeConfig.open,
-                hours: storeConfig.hours,
-                map_link: storeConfig.mapLink,
-                global_bonus_percent: storeConfig.global_bonus_percent
-            });
-        } catch(e) {}
+        storeConfig.open = !storeConfig.open; saveStoreConfig(); updateStoreUI();
+        try { sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:storeConfig.mapLink, global_bonus_percent:storeConfig.global_bonus_percent }); } catch(e) {}
     }
-
     function setStoreLink() {
         const link = prompt('Ссылка на место в картах:', storeConfig.mapLink || '');
-        if (link !== null) {
-            storeConfig.mapLink = link;
-            saveStoreConfig();
-            // Сохраняем в Supabase
-            try {
-                sb.from('store_config').upsert({
-                    id: 1,
-                    open: storeConfig.open,
-                    hours: storeConfig.hours,
-                    map_link: link,
-                    global_bonus_percent: storeConfig.global_bonus_percent
-                });
-            } catch(e) {}
-        }
+        if (link !== null) { storeConfig.mapLink = link; saveStoreConfig(); try { sb.from('store_config').upsert({ id:1, open:storeConfig.open, hours:storeConfig.hours, map_link:link, global_bonus_percent:storeConfig.global_bonus_percent }); } catch(e) {} }
     }
-
     async function loadStoreConfig() {
-        // Сначала пробуем загрузить из Supabase
         try {
             const { data } = await sb.from('store_config').select('*').eq('id', 1).single();
-            if (data) {
-                storeConfig.open = data.open;
-                storeConfig.hours = data.hours || '09:00 - 20:00';
-                storeConfig.mapLink = data.map_link || '';
-                storeConfig.global_bonus_percent = data.global_bonus_percent || 100;
-            }
-        } catch(e) {
-            // Если Supabase недоступен, берём из localStorage
-            const saved = localStorage.getItem('store_config');
-            if (saved) {
-                try { storeConfig = JSON.parse(saved); } catch(e2) {}
-            }
-        }
-        // Сохраняем в localStorage для быстрого доступа
-        saveStoreConfig();
-        updateStoreUI();
+            if (data) { storeConfig.open = data.open; storeConfig.hours = data.hours || '09:00 - 20:00'; storeConfig.mapLink = data.map_link || ''; storeConfig.global_bonus_percent = data.global_bonus_percent || 100; }
+        } catch(e) { const saved = localStorage.getItem('store_config'); if (saved) try { storeConfig = JSON.parse(saved); } catch(e2) {} }
+        saveStoreConfig(); updateStoreUI();
     }
 
     document.getElementById('loginBtn').addEventListener('click', adminLogin);
@@ -219,14 +179,8 @@
         const login = document.getElementById('loginCode').value.trim();
         const password = document.getElementById('loginPassword').value.trim();
         let staff = null;
-        try {
-            const { data } = await sb.from('store_staff').select('*').eq('login', login).eq('password', password).single();
-            staff = data;
-        } catch(e) {}
-        if (!staff) {
-            const localStaff = JSON.parse(localStorage.getItem('store_staff') || '[]');
-            staff = localStaff.find(s => s.login === login && s.password === password);
-        }
+        try { const { data } = await sb.from('store_staff').select('*').eq('login', login).eq('password', password).single(); staff = data; } catch(e) {}
+        if (!staff) { const localStaff = JSON.parse(localStorage.getItem('store_staff') || '[]'); staff = localStaff.find(s => s.login === login && s.password === password); }
         if (staff) {
             currentStaff = staff;
             document.getElementById('loginScreen').classList.add('hidden');
@@ -261,40 +215,32 @@
 
     // ЗАКАЗЫ
     async function adminRenderOrders() {
-        let orders = [];
-        try { const { data } = await sb.from('store_orders').select('*').order('created_at',{ascending:false}); orders = data || []; }
-        catch(e) { orders = JSON.parse(localStorage.getItem('store_orders') || '[]'); }
+        try {
+            const { data } = await sb.from('store_orders').select('*').order('created_at',{ascending:false});
+            allOrdersCache = data || [];
+            localStorage.setItem('store_orders_backup', JSON.stringify(allOrdersCache));
+        } catch(e) {
+            allOrdersCache = JSON.parse(localStorage.getItem('store_orders_backup') || '[]');
+        }
         
-        // Премиум-заказы первыми
-        const premiumOrders = orders.filter(o => o.premium);
-        const normalOrders = orders.filter(o => !o.premium);
+        const premiumOrders = allOrdersCache.filter(o => o.premium);
+        const normalOrders = allOrdersCache.filter(o => !o.premium);
         const sorted = [...premiumOrders, ...normalOrders];
         
         document.getElementById('aOrdersList').innerHTML = sorted.length===0 ? '<p>Нет заказов</p>' : sorted.map(o => {
             const next = statusFlow[o.status];
-            return `<div class="search-result"><div><b>${o.client_name}</b> ${o.premium ? '⭐' : ''}<br>${o.total} руб | Баллы: +${o.total_bonus||0} | Списано: ${o.use_bonus||0}<br><span class="status-badge status-${o.status}">${statusNames[o.status]||o.status}</span>
+            const time = new Date(o.created_at).toLocaleString('ru');
+            const items = o.items || [];
+            const codes = items.map(i => i.product_code).join(', ');
+            return `<div class="search-result"><div><b>${o.client_name}</b> ${o.premium ? '⭐' : ''}<br>${o.total} руб | Баллы: +${o.total_bonus||0} | Списано: ${o.use_bonus||0}<br><span class="status-badge status-${o.status}">${statusNames[o.status]||o.status}</span><br><small>${time}</small>
             ${o.pickup_code ? `<br>Код: <b>${o.pickup_code}</b>` : ''}
-            <button class="btn btn-sm" onclick="showOrderDetail('${o.id}')">Подробнее</button></div>
+            <br><small>Товары: ${codes}</small></div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;">
                 ${next ? `<button class="btn btn-sm" onclick="adminSetStatus(${o.id},'${next.next}')">${next.btn}</button>` : ''}
-                ${o.status==='ready' ? `
-                    <button class="btn btn-sm btn-green" onclick="adminSetStatus(${o.id},'done')">Выдать</button>
-                    <button class="btn btn-sm btn-danger" onclick="cancelReady(${o.id})">Отмена</button>
-                ` : ''}
+                ${o.status==='ready' ? `<button class="btn btn-sm btn-green" onclick="adminSetStatus(${o.id},'done')">Выдать</button><button class="btn btn-sm btn-danger" onclick="cancelReady(${o.id})">Отмена</button>` : ''}
                 ${o.status==='new' ? `<button class="btn btn-sm btn-danger" onclick="adminSetStatus(${o.id},'cancelled')">Отклонить</button>` : ''}
             </div></div>`;
         }).join('');
-    }
-
-    function showOrderDetail(id) {
-        const orders = JSON.parse(localStorage.getItem('store_orders_backup') || '[]');
-        const o = orders.find(o => o.id == id);
-        if (o) {
-            const items = o.items || [];
-            alert('Заказ #' + (o.pickup_code || '—') + '\n' + o.client_name + '\n\n' + items.map(i => '#' + i.product_code + ' ' + i.product_name + ' x' + i.quantity + ' = ' + (i.price * i.quantity) + ' руб').join('\n') + '\n\nСумма: ' + o.total + ' руб\nБаллы: +' + (o.total_bonus||0) + '\nСписано: ' + (o.use_bonus||0) + ' баллов\nСтатус: ' + (statusNames[o.status]||o.status));
-        } else {
-            alert('Заказ не найден в локальном кэше. Обновите страницу.');
-        }
     }
 
     async function findOrderByCode() {
@@ -302,9 +248,18 @@
         if (!code) return;
         let order = null;
         try { const { data } = await sb.from('store_orders').select('*').eq('pickup_code', code).single(); order = data; }
-        catch(e) { const orders = JSON.parse(localStorage.getItem('store_orders')||'[]'); order = orders.find(o => o.pickup_code === code); }
-        document.getElementById('orderSearchResult').innerHTML = !order ? '<p>Заказ не найден</p>' : `
-            <div class="search-result"><div><b>${order.client_name}</b><br>${order.total} руб<br><span class="status-badge status-${order.status}">${statusNames[order.status]}</span></div>
+        catch(e) { order = (JSON.parse(localStorage.getItem('store_orders_backup')||'[]')).find(o => o.pickup_code === code); }
+        if (!order) { document.getElementById('orderSearchResult').innerHTML = '<p>Заказ не найден</p>'; return; }
+        const items = order.items || [];
+        const codes = items.map(i => i.product_code).join(', ');
+        const time = new Date(order.created_at).toLocaleString('ru');
+        
+        // Определяем ячейку
+        const orderIndex = allOrdersCache.findIndex(o => o.id === order.id);
+        const cell = orderIndex >= 0 ? (orderIndex % 10 + 1) : '?';
+        
+        document.getElementById('orderSearchResult').innerHTML = `
+            <div class="search-result"><div><b>${order.client_name}</b><br>${order.total} руб<br><span class="status-badge status-${order.status}">${statusNames[order.status]}</span><br><small>${time}</small><br><small>Товары: ${codes}</small><br><b>Ячейка: ${cell}</b></div>
             ${statusFlow[order.status] ? `<button class="btn btn-sm btn-green" onclick="adminSetStatus(${order.id},'${statusFlow[order.status].next}')">${statusFlow[order.status].btn}</button>` : ''}</div>`;
     }
 
@@ -472,20 +427,12 @@
         const role = prompt('Роль (admin/seller/delivery):', staffData.role);
         const changePwd = confirm('Сменить пароль?');
         let password = staffData.password;
-        if (changePwd) {
-            password = prompt('Новый пароль:'); if (!password) return;
-        }
+        if (changePwd) { password = prompt('Новый пароль:'); if (!password) return; }
         try { await sb.from('store_staff').update({ name, role, password }).eq('id', id); } catch(e) {}
         adminRenderStaff();
     }
-    async function getStaffById(id) {
-        try { const { data } = await sb.from('store_staff').select('*').eq('id', id).single(); return data; } catch(e) { return null; }
-    }
-    async function deleteStaff(id) {
-        if (!confirm('Удалить сотрудника?')) return;
-        try { await sb.from('store_staff').delete().eq('id', id); } catch(e) {}
-        adminRenderStaff();
-    }
+    async function getStaffById(id) { try { const { data } = await sb.from('store_staff').select('*').eq('id', id).single(); return data; } catch(e) { return null; } }
+    async function deleteStaff(id) { if (!confirm('Удалить сотрудника?')) return; try { await sb.from('store_staff').delete().eq('id', id); } catch(e) {} adminRenderStaff(); }
 
     if (!localStorage.getItem('store_staff')) {
         localStorage.setItem('store_staff', JSON.stringify([{ name:'Максим', login:'12345', password:'admin123', role:'admin' }]));
